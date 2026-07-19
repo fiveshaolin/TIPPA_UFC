@@ -9,10 +9,11 @@
 <body>
   <main class="app">
     <h1>TIPPA UFC</h1>
-    <p class="sub">Inloggningstest mot Supabase v5</p>
+    <p class="sub">Inloggningstest mot Supabase v6</p>
 
     <section class="card">
       <h2>Supabase</h2>
+
       <label>
         Project URL
         <input id="supabase-url" type="text" placeholder="https://your-project.supabase.co" />
@@ -29,6 +30,7 @@
 
     <section class="card">
       <h2>Skapa konto / logga in</h2>
+
       <label>
         E-post
         <input id="email" type="email" placeholder="you@example.com" />
@@ -46,6 +48,21 @@
       </div>
 
       <p id="auth-status" class="status"></p>
+
+      <hr />
+
+      <h3>Byt lösenord</h3>
+
+      <label>
+        Nytt lösenord
+        <input id="new-password" type="password" placeholder="Nytt lösenord" />
+      </label>
+
+      <div class="actions">
+        <button id="change-password" class="secondary">Byt lösenord</button>
+      </div>
+
+      <p id="password-status" class="status"></p>
     </section>
 
     <section class="card">
@@ -55,6 +72,7 @@
 
     <section class="card">
       <h2>Min vy</h2>
+
       <div class="actions">
         <button id="load-data">Ladda appdata</button>
         <button id="submit-all" class="secondary">Skicka in alla picks</button>
