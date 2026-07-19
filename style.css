@@ -88,3 +88,15 @@ pre {
   border-radius: 8px;
   border: 1px solid #e5e7eb;
 }
+h3 {
+  margin-top: 18px;
+  margin-bottom: 8px;
+}
+
+.fight-item {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
