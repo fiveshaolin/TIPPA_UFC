@@ -101,6 +101,7 @@ async function refreshSession() {
     const { data, error } = await supabaseClient.auth.getSession();
 
     if (error) {
+      console.error("Session error:", error);
       setStatus(authStatus, "Kunde inte läsa session: " + error.message);
       sessionBox.textContent = "Ingen aktiv session.";
       currentSession = null;
@@ -128,7 +129,7 @@ async function refreshSession() {
     setStatus(authStatus, "Inloggad som " + data.session.user.email);
     return data.session;
   } catch (err) {
-    console.error(err);
+    console.error("Session exception:", err);
     setStatus(authStatus, "Sessionsfel: " + err.message);
     currentSession = null;
     return null;
@@ -268,13 +269,14 @@ async function savePick(fightId) {
       .upsert(payload, { onConflict: "user_id,group_id,event_id,fight_id" });
 
     if (error) {
+      console.error("Save pick error:", error);
       statusEl.textContent = "Fel vid sparande: " + error.message;
       return;
     }
 
     statusEl.textContent = "Pick sparad.";
   } catch (err) {
-    console.error(err);
+    console.error("Save pick exception:", err);
     const statusEl = document.getElementById(`pick-status-${fightId}`);
     if (statusEl) statusEl.textContent = "Oväntat fel: " + err.message;
   }
@@ -289,7 +291,11 @@ async function hasSubmittedCurrentEvent() {
     .eq("event_id", currentEvent.id)
     .limit(1);
 
-  if (error) return false;
+  if (error) {
+    console.error("Submission check error:", error);
+    return false;
+  }
+
   return !!(data && data.length > 0);
 }
 
@@ -300,6 +306,7 @@ async function loadSubmissionState() {
     .eq("group_id", currentGroup.id);
 
   if (memberError) {
+    console.error("Member count error:", memberError);
     setStatus(submissionStatus, "Fel vid hämtning av medlemmar: " + memberError.message);
     return;
   }
@@ -311,6 +318,7 @@ async function loadSubmissionState() {
     .eq("event_id", currentEvent.id);
 
   if (submittedError) {
+    console.error("Submission count error:", submittedError);
     setStatus(submissionStatus, "Fel vid hämtning av submissions: " + submittedError.message);
     return;
   }
@@ -341,18 +349,13 @@ async function loadOtherUsersPicks() {
 
   const { data, error } = await supabaseClient
     .from("picks")
-    .select(`
-      *,
-      profiles:user_id (
-        id,
-        email
-      )
-    `)
+    .select("*")
     .eq("group_id", currentGroup.id)
     .eq("event_id", currentEvent.id)
     .order("fight_id", { ascending: true });
 
   if (error) {
+    console.error("Other picks error:", error);
     othersStatus.textContent = "Fel vid hämtning av andras picks: " + error.message;
     return;
   }
@@ -361,12 +364,9 @@ async function loadOtherUsersPicks() {
   (data || []).forEach((pick) => {
     const key = pick.user_id;
     if (!grouped[key]) {
-      grouped[key] = {
-        email: pick.profiles?.email || pick.user_id,
-        picks: []
-      };
+      grouped[key] = [];
     }
-    grouped[key].picks.push(pick);
+    grouped[key].push(pick);
   });
 
   const userIds = Object.keys(grouped);
@@ -380,9 +380,7 @@ async function loadOtherUsersPicks() {
 
   othersPicksBox.innerHTML = userIds
     .map((userId) => {
-      const userBlock = grouped[userId];
-
-      const picksHtml = userBlock.picks
+      const picksHtml = grouped[userId]
         .map((pick) => {
           const fight = currentFights.find((f) => f.id === pick.fight_id);
 
@@ -408,7 +406,7 @@ async function loadOtherUsersPicks() {
 
       return `
         <div class="fight-item">
-          <strong>${userBlock.email}</strong>
+          <strong>${userId}</strong>
           <ul>${picksHtml}</ul>
         </div>
       `;
@@ -438,6 +436,7 @@ async function submitAllPicks() {
       .eq("event_id", currentEvent.id);
 
     if (ownPicksError) {
+      console.error("Own picks error:", ownPicksError);
       setStatus(dataStatus, "Fel vid kontroll av picks: " + ownPicksError.message);
       return;
     }
@@ -464,6 +463,7 @@ async function submitAllPicks() {
       );
 
     if (error) {
+      console.error("Submit error:", error);
       setStatus(dataStatus, "Fel vid submit: " + error.message);
       return;
     }
@@ -472,7 +472,7 @@ async function submitAllPicks() {
     await loadSubmissionState();
     await loadOtherUsersPicks();
   } catch (err) {
-    console.error(err);
+    console.error("Submit exception:", err);
     setStatus(dataStatus, "Oväntat submit-fel: " + err.message);
   }
 }
@@ -502,6 +502,7 @@ async function changePassword() {
     });
 
     if (error) {
+      console.error("Change password error:", error);
       setStatus(passwordStatus, "Fel vid lösenordsbyte: " + error.message);
       return;
     }
@@ -509,7 +510,7 @@ async function changePassword() {
     setStatus(passwordStatus, "Lösenordet är uppdaterat.");
     newPasswordInput.value = "";
   } catch (err) {
-    console.error(err);
+    console.error("Change password exception:", err);
     setStatus(passwordStatus, "Oväntat fel: " + err.message);
   }
 }
@@ -542,6 +543,7 @@ async function loadAppData() {
       .limit(1);
 
     if (groupsError) {
+      console.error("Groups error:", groupsError);
       setStatus(dataStatus, "Fel vid hämtning av grupp: " + groupsError.message);
       return;
     }
@@ -556,12 +558,19 @@ async function loadAppData() {
       .limit(1);
 
     if (eventsError) {
+      console.error("Events error:", eventsError);
       setStatus(dataStatus, "Fel vid hämtning av event: " + eventsError.message);
       return;
     }
 
     currentEvent = events?.[0] || null;
     eventBox.textContent = currentEvent ? JSON.stringify(currentEvent, null, 2) : "Inget event hittat.";
+
+    if (!currentGroup) {
+      fightsBox.innerHTML = "Ingen grupp hittades.";
+      setStatus(dataStatus, "Ingen grupp hittad.");
+      return;
+    }
 
     if (!currentEvent) {
       fightsBox.innerHTML = "Inga matcher hittades.";
@@ -577,6 +586,7 @@ async function loadAppData() {
       .order("bout_order", { ascending: true });
 
     if (fightsError) {
+      console.error("Fights error:", fightsError);
       setStatus(dataStatus, "Fel vid hämtning av matcher: " + fightsError.message);
       return;
     }
@@ -591,6 +601,7 @@ async function loadAppData() {
       .eq("user_id", currentSession.user.id);
 
     if (picksError) {
+      console.error("Existing picks error:", picksError);
       setStatus(dataStatus, "Fel vid hämtning av picks: " + picksError.message);
       return;
     }
@@ -617,7 +628,7 @@ async function loadAppData() {
     await loadOtherUsersPicks();
     setStatus(dataStatus, "Appdata laddad.");
   } catch (err) {
-    console.error(err);
+    console.error("Load app data exception:", err);
     setStatus(dataStatus, "Oväntat fel: " + err.message);
   }
 }
@@ -655,14 +666,16 @@ signUpBtn.addEventListener("click", async () => {
     const { data, error } = await supabaseClient.auth.signUp({ email, password });
 
     if (error) {
+      console.error("Signup error:", error);
       setStatus(authStatus, "Signup fel: " + error.message);
       return;
     }
 
+    console.log("Signup success:", data);
     setStatus(authStatus, "Konto skapat: " + (data.user?.email || ""));
-    refreshSession();
+    await refreshSession();
   } catch (err) {
-    console.error(err);
+    console.error("Signup exception:", err);
     setStatus(authStatus, "Signup exception: " + err.message);
   }
 });
@@ -677,17 +690,19 @@ signInBtn.addEventListener("click", async () => {
     const email = emailInput.value.trim();
     const password = passwordInput.value.trim();
 
-    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
 
     if (error) {
+      console.error("Login error:", error);
       setStatus(authStatus, "Login fel: " + error.message);
       return;
     }
 
+    console.log("Login success:", data);
     setStatus(authStatus, "Inloggning lyckades.");
-    refreshSession();
+    await refreshSession();
   } catch (err) {
-    console.error(err);
+    console.error("Login exception:", err);
     setStatus(authStatus, "Login exception: " + err.message);
   }
 });
@@ -702,6 +717,7 @@ signOutBtn.addEventListener("click", async () => {
     const { error } = await supabaseClient.auth.signOut();
 
     if (error) {
+      console.error("Logout error:", error);
       setStatus(authStatus, "Logout fel: " + error.message);
       return;
     }
@@ -727,7 +743,7 @@ signOutBtn.addEventListener("click", async () => {
     setStatus(submissionStatus, "");
     setStatus(revealStatus, "");
   } catch (err) {
-    console.error(err);
+    console.error("Logout exception:", err);
     setStatus(authStatus, "Logout exception: " + err.message);
   }
 });
@@ -737,4 +753,3 @@ submitAllBtn.addEventListener("click", submitAllPicks);
 changePasswordBtn.addEventListener("click", changePassword);
 
 initSupabase();
-</query>
