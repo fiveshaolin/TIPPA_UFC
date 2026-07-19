@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TIPPA UFC</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <main class="app">
+    <h1>TIPPA UFC</h1>
+    <p class="sub">Inloggningstest mot Supabase</p>
+
+    <section class="card">
+      <h2>Supabase</h2>
+      <label>
+        Project URL
+        <input id="supabase-url" type="text" placeholder="https://your-project.supabase.co" />
+      </label>
+
+      <label>
+        Publishable key
+        <input id="supabase-key" type="text" placeholder="Paste your publishable/anon key" />
+      </label>
+
+      <button id="save-config">Spara anslutning</button>
+      <p id="config-status" class="status"></p>
+    </section>
+
+    <section class="card">
+      <h2>Skapa konto / logga in</h2>
+      <label>
+        E-post
+        <input id="email" type="email" placeholder="you@example.com" />
+      </label>
+
+      <label>
+        Lösenord
+        <input id="password" type="password" placeholder="Minst 6 tecken" />
+      </label>
+
+      <div class="actions">
+        <button id="sign-up">Skapa konto</button>
+        <button id="sign-in" class="secondary">Logga in</button>
+        <button id="sign-out" class="danger">Logga ut</button>
+      </div>
+
+      <p id="auth-status" class="status"></p>
+    </section>
+
+    <section class="card">
+      <h2>Session</h2>
+      <pre id="session-box">Ingen aktiv session.</pre>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
