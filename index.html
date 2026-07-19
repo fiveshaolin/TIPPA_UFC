@@ -9,7 +9,7 @@
 <body>
   <main class="app">
     <h1>TIPPA UFC</h1>
-    <p class="sub">Inloggningstest mot Supabase v4</p>
+    <p class="sub">Inloggningstest mot Supabase v5</p>
 
     <section class="card">
       <h2>Supabase</h2>
@@ -55,8 +55,14 @@
 
     <section class="card">
       <h2>Min vy</h2>
-      <button id="load-data">Ladda appdata</button>
+      <div class="actions">
+        <button id="load-data">Ladda appdata</button>
+        <button id="submit-all" class="secondary">Skicka in alla picks</button>
+      </div>
+
       <p id="data-status" class="status"></p>
+      <p id="submission-status" class="status"></p>
+      <p id="reveal-status" class="status"></p>
 
       <h3>Användare</h3>
       <pre id="user-box">Ingen data ännu.</pre>
@@ -69,6 +75,12 @@
 
       <h3>Main card</h3>
       <div id="fights-box">Ingen data ännu.</div>
+    </section>
+
+    <section class="card">
+      <h2>Andras picks</h2>
+      <p id="others-status" class="status">Dolda tills alla skickat in.</p>
+      <div id="others-picks-box">Inget att visa ännu.</div>
     </section>
   </main>
 
