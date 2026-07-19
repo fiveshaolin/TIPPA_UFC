@@ -140,7 +140,6 @@ function renderPickForm(fight, existingPick) {
   const selectedMethod = existingPick?.method || "";
   const selectedRound = existingPick?.round_number || "";
   const selectedDecision = existingPick?.decision_type || "";
-  const isSubmittedText = currentRevealOpen ? "" : "";
 
   return `
     <div class="fight-item">
@@ -173,4 +172,107 @@ function renderPickForm(fight, existingPick) {
           <option value="2" ${String(selectedRound) === "2" ? "selected" : ""}>2</option>
           <option value="3" ${String(selectedRound) === "3" ? "selected" : ""}>3</option>
           <option value="4" ${String(selectedRound) === "4" ? "selected" : ""}>4</option>
-          <option 
+          <option value="5" ${String(selectedRound) === "5" ? "selected" : ""}>5</option>
+        </select>
+      </label>
+
+      <label class="decision-wrapper" data-fight-id="${fight.id}" style="${selectedMethod === "decision" ? "" : "display:none;"}">
+        Decision
+        <select data-fight-id="${fight.id}" data-field="decision_type">
+          <option value="">Välj decision</option>
+          <option value="unanimous" ${selectedDecision === "unanimous" ? "selected" : ""}>Unanimous</option>
+          <option value="split" ${selectedDecision === "split" ? "selected" : ""}>Split</option>
+        </select>
+      </label>
+
+      <button class="save-pick-btn" data-fight-id="${fight.id}">Spara pick</button>
+      <p class="pick-status" id="pick-status-${fight.id}"></p>
+    </div>
+  `;
+}
+
+function attachFightFormEvents() {
+  document.querySelectorAll(".method-select").forEach((select) => {
+    select.addEventListener("change", (event) => {
+      const fightId = event.target.dataset.fightId;
+      const method = event.target.value;
+
+      const roundWrapper = document.querySelector(`.round-wrapper[data-fight-id="${fightId}"]`);
+      const decisionWrapper = document.querySelector(`.decision-wrapper[data-fight-id="${fightId}"]`);
+
+      if (method === "ko_tko" || method === "sub") {
+        roundWrapper.style.display = "block";
+        decisionWrapper.style.display = "none";
+      } else if (method === "decision") {
+        roundWrapper.style.display = "none";
+        decisionWrapper.style.display = "block";
+      } else {
+        roundWrapper.style.display = "none";
+        decisionWrapper.style.display = "none";
+      }
+    });
+  });
+
+  document.querySelectorAll(".save-pick-btn").forEach((button) => {
+    button.addEventListener("click", async (event) => {
+      const fightId = event.target.dataset.fightId;
+      await savePick(fightId);
+    });
+  });
+}
+
+async function savePick(fightId) {
+  try {
+    if (!supabaseClient || !currentSession || !currentGroup || !currentEvent) return;
+
+    if (await hasSubmittedCurrentEvent()) {
+      const statusEl = document.getElementById(`pick-status-${fightId}`);
+      if (statusEl) statusEl.textContent = "Du har redan skickat in dina picks.";
+      return;
+    }
+
+    const winner = document.querySelector(`[data-fight-id="${fightId}"][data-field="picked_winner"]`)?.value || "";
+    const method = document.querySelector(`[data-fight-id="${fightId}"][data-field="method"]`)?.value || "";
+    const roundNumberValue = document.querySelector(`[data-fight-id="${fightId}"][data-field="round_number"]`)?.value || "";
+    const decisionType = document.querySelector(`[data-fight-id="${fightId}"][data-field="decision_type"]`)?.value || "";
+    const statusEl = document.getElementById(`pick-status-${fightId}`);
+
+    if (!winner || !method) {
+      statusEl.textContent = "Välj vinnare och metod.";
+      return;
+    }
+
+    if ((method === "ko_tko" || method === "sub") && !roundNumberValue) {
+      statusEl.textContent = "Välj rond.";
+      return;
+    }
+
+    if (method === "decision" && !decisionType) {
+      statusEl.textContent = "Välj decision-typ.";
+      return;
+    }
+
+    const payload = {
+      user_id: currentSession.user.id,
+      group_id: currentGroup.id,
+      event_id: currentEvent.id,
+      fight_id: fightId,
+      picked_winner: winner,
+      method,
+      round_number: method === "decision" ? null : Number(roundNumberValue),
+      decision_type: method === "decision" ? decisionType : null
+    };
+
+    const { error } = await supabaseClient
+      .from("picks")
+      .upsert(payload, { onConflict: "user_id,group_id,event_id,fight_id" });
+
+    if (error) {
+      statusEl.textContent = "Fel vid sparande: " + error.message;
+      return;
+    }
+
+    statusEl.textContent = "Pick sparad.";
+  } catch (err) {
+    console.error(err);
+    const 
