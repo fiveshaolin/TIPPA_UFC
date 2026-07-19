@@ -17,6 +17,11 @@ const signUpBtn = document.getElementById("sign-up");
 const signInBtn = document.getElementById("sign-in");
 const signOutBtn = document.getElementById("sign-out");
 const authStatus = document.getElementById("auth-status");
+
+const newPasswordInput = document.getElementById("new-password");
+const changePasswordBtn = document.getElementById("change-password");
+const passwordStatus = document.getElementById("password-status");
+
 const sessionBox = document.getElementById("session-box");
 
 const loadDataBtn = document.getElementById("load-data");
@@ -373,7 +378,7 @@ async function loadOtherUsersPicks() {
 
           return `
             <li>
-              ${fight ? `${fight.fighter_a} vs ${fight.fighter_b}` : pick.fight_id}: 
+              ${fight ? `${fight.fighter_a} vs ${fight.fighter_b}` : pick.fight_id}:
               ${pick.picked_winner} via ${details}
             </li>
           `;
@@ -445,6 +450,43 @@ async function submitAllPicks() {
   } catch (err) {
     console.error(err);
     setStatus(dataStatus, "Oväntat submit-fel: " + err.message);
+  }
+}
+
+async function changePassword() {
+  try {
+    if (!supabaseClient) {
+      setStatus(passwordStatus, "Spara Supabase-anslutning först.");
+      return;
+    }
+
+    const session = await refreshSession();
+    if (!session) {
+      setStatus(passwordStatus, "Du måste vara inloggad.");
+      return;
+    }
+
+    const newPassword = newPasswordInput.value.trim();
+
+    if (newPassword.length < 6) {
+      setStatus(passwordStatus, "Lösenordet måste vara minst 6 tecken.");
+      return;
+    }
+
+    const { error } = await supabaseClient.auth.updateUser({
+      password: newPassword
+    });
+
+    if (error) {
+      setStatus(passwordStatus, "Fel vid lösenordsbyte: " + error.message);
+      return;
+    }
+
+    setStatus(passwordStatus, "Lösenordet är uppdaterat.");
+    newPasswordInput.value = "";
+  } catch (err) {
+    console.error(err);
+    setStatus(passwordStatus, "Oväntat fel: " + err.message);
   }
 }
 
@@ -654,7 +696,9 @@ signOutBtn.addEventListener("click", async () => {
     fightsBox.innerHTML = "Ingen data ännu.";
     othersPicksBox.innerHTML = "Inget att visa ännu.";
     othersStatus.textContent = "Dolda tills alla skickat in.";
+
     setStatus(authStatus, "Utloggad.");
+    setStatus(passwordStatus, "");
     setStatus(dataStatus, "");
     setStatus(submissionStatus, "");
     setStatus(revealStatus, "");
@@ -666,5 +710,6 @@ signOutBtn.addEventListener("click", async () => {
 
 loadDataBtn.addEventListener("click", loadAppData);
 submitAllBtn.addEventListener("click", submitAllPicks);
+changePasswordBtn.addEventListener("click", changePassword);
 
 initSupabase();
