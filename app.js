@@ -1,4 +1,4 @@
-let supabase = null;
+let supabaseClient = null;
 
 const urlInput = document.getElementById("supabase-url");
 const keyInput = document.getElementById("supabase-key");
@@ -56,7 +56,7 @@ function initSupabase() {
     }
 
     const { createClient } = window.supabase;
-    supabase = createClient(savedUrl, savedKey);
+    supabaseClient = createClient(savedUrl, savedKey);
 
     setStatus(configStatus, "Supabase anslutning sparad.");
     refreshSession();
@@ -68,12 +68,12 @@ function initSupabase() {
 
 async function refreshSession() {
   try {
-    if (!supabase) {
+    if (!supabaseClient) {
       sessionBox.textContent = "Ingen aktiv session.";
       return;
     }
 
-    const { data, error } = await supabase.auth.getSession();
+    const { data, error } = await supabaseClient.auth.getSession();
 
     if (error) {
       setStatus(authStatus, "Kunde inte läsa session: " + error.message);
@@ -125,7 +125,7 @@ saveConfigBtn.addEventListener("click", () => {
 
 signUpBtn.addEventListener("click", async () => {
   try {
-    if (!supabase) {
+    if (!supabaseClient) {
       setStatus(authStatus, "Spara Supabase-anslutning först.");
       return;
     }
@@ -133,7 +133,7 @@ signUpBtn.addEventListener("click", async () => {
     const email = emailInput.value.trim();
     const password = passwordInput.value.trim();
 
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error } = await supabaseClient.auth.signUp({
       email,
       password
     });
@@ -153,7 +153,7 @@ signUpBtn.addEventListener("click", async () => {
 
 signInBtn.addEventListener("click", async () => {
   try {
-    if (!supabase) {
+    if (!supabaseClient) {
       setStatus(authStatus, "Spara Supabase-anslutning först.");
       return;
     }
@@ -161,7 +161,7 @@ signInBtn.addEventListener("click", async () => {
     const email = emailInput.value.trim();
     const password = passwordInput.value.trim();
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { error } = await supabaseClient.auth.signInWithPassword({
       email,
       password
     });
@@ -181,12 +181,12 @@ signInBtn.addEventListener("click", async () => {
 
 signOutBtn.addEventListener("click", async () => {
   try {
-    if (!supabase) {
+    if (!supabaseClient) {
       setStatus(authStatus, "Ingen Supabase-klient aktiv.");
       return;
     }
 
-    const { error } = await supabase.auth.signOut();
+    const { error } = await supabaseClient.auth.signOut();
 
     if (error) {
       setStatus(authStatus, "Logout fel: " + error.message);
