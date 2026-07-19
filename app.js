@@ -339,12 +339,12 @@ async function loadOtherUsersPicks() {
     return;
   }
 
-  const { data, error } = await supabaseClient
-    .from("picks")
-    .select("*")
-    .eq("group_id", currentGroup.id)
-    .eq("event_id", currentEvent.id)
-    .order("created_at", { ascending: true });
+ const { data, error } = await supabaseClient
+  .from("picks")
+  .select("*")
+  .eq("group_id", currentGroup.id)
+  .eq("event_id", currentEvent.id)
+  .order("fight_id", { ascending: true });
 
   if (error) {
     othersStatus.textContent = "Fel vid hämtning av andras picks: " + error.message;
