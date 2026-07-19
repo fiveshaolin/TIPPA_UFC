@@ -13,6 +13,13 @@ const signOutBtn = document.getElementById("sign-out");
 const authStatus = document.getElementById("auth-status");
 const sessionBox = document.getElementById("session-box");
 
+const loadDataBtn = document.getElementById("load-data");
+const dataStatus = document.getElementById("data-status");
+const userBox = document.getElementById("user-box");
+const groupBox = document.getElementById("group-box");
+const eventBox = document.getElementById("event-box");
+const fightsBox = document.getElementById("fights-box");
+
 function setStatus(el, message) {
   if (el) el.textContent = message;
   console.log(message);
@@ -78,13 +85,13 @@ async function refreshSession() {
     if (error) {
       setStatus(authStatus, "Kunde inte läsa session: " + error.message);
       sessionBox.textContent = "Ingen aktiv session.";
-      return;
+      return null;
     }
 
     if (!data.session) {
       sessionBox.textContent = "Ingen aktiv session.";
       setStatus(authStatus, "Inte inloggad.");
-      return;
+      return null;
     }
 
     sessionBox.textContent = JSON.stringify(
@@ -97,9 +104,102 @@ async function refreshSession() {
     );
 
     setStatus(authStatus, "Inloggad som " + data.session.user.email);
+    return data.session;
   } catch (err) {
     console.error(err);
     setStatus(authStatus, "Sessionsfel: " + err.message);
+    return null;
+  }
+}
+
+async function loadAppData() {
+  try {
+    if (!supabaseClient) {
+      setStatus(dataStatus, "Spara Supabase-anslutning först.");
+      return;
+    }
+
+    const session = await refreshSession();
+    if (!session) {
+      setStatus(dataStatus, "Du måste vara inloggad.");
+      return;
+    }
+
+    userBox.textContent = JSON.stringify(
+      {
+        id: session.user.id,
+        email: session.user.email
+      },
+      null,
+      2
+    );
+
+    const { data: groups, error: groupsError } = await supabaseClient
+      .from("groups")
+      .select("*")
+      .limit(1);
+
+    if (groupsError) {
+      setStatus(dataStatus, "Fel vid hämtning av grupp: " + groupsError.message);
+      return;
+    }
+
+    const group = groups?.[0] || null;
+    groupBox.textContent = group ? JSON.stringify(group, null, 2) : "Ingen grupp hittad.";
+
+    const { data: events, error: eventsError } = await supabaseClient
+      .from("events")
+      .select("*")
+      .order("event_date", { ascending: true })
+      .limit(1);
+
+    if (eventsError) {
+      setStatus(dataStatus, "Fel vid hämtning av event: " + eventsError.message);
+      return;
+    }
+
+    const event = events?.[0] || null;
+    eventBox.textContent = event ? JSON.stringify(event, null, 2) : "Inget event hittat.";
+
+    if (!event) {
+      fightsBox.innerHTML = "Inga matcher hittades.";
+      setStatus(dataStatus, "Ingen eventdata att ladda matcher från.");
+      return;
+    }
+
+    const { data: fights, error: fightsError } = await supabaseClient
+      .from("fights")
+      .select("*")
+      .eq("event_id", event.id)
+      .eq("is_main_card", true)
+      .order("bout_order", { ascending: true });
+
+    if (fightsError) {
+      setStatus(dataStatus, "Fel vid hämtning av matcher: " + fightsError.message);
+      return;
+    }
+
+    if (!fights || fights.length === 0) {
+      fightsBox.innerHTML = "Inga main-card matcher hittades.";
+      setStatus(dataStatus, "Data laddad, men inga matcher hittades.");
+      return;
+    }
+
+    fightsBox.innerHTML = fights
+      .map(
+        (fight) => `
+          <div class="fight-item">
+            <strong>Match ${fight.bout_order}:</strong><br>
+            ${fight.fighter_a} vs ${fight.fighter_b}
+          </div>
+        `
+      )
+      .join("");
+
+    setStatus(dataStatus, "Appdata laddad.");
+  } catch (err) {
+    console.error(err);
+    setStatus(dataStatus, "Oväntat fel: " + err.message);
   }
 }
 
@@ -194,11 +294,18 @@ signOutBtn.addEventListener("click", async () => {
     }
 
     sessionBox.textContent = "Ingen aktiv session.";
+    userBox.textContent = "Ingen data ännu.";
+    groupBox.textContent = "Ingen data ännu.";
+    eventBox.textContent = "Ingen data ännu.";
+    fightsBox.innerHTML = "Ingen data ännu.";
     setStatus(authStatus, "Utloggad.");
+    setStatus(dataStatus, "");
   } catch (err) {
     console.error(err);
     setStatus(authStatus, "Logout exception: " + err.message);
   }
 });
+
+loadDataBtn.addEventListener("click", loadAppData);
 
 initSupabase();
