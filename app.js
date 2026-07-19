@@ -3,6 +3,8 @@ let currentSession = null;
 let currentGroup = null;
 let currentEvent = null;
 let currentFights = [];
+let currentOwnPicks = [];
+let currentRevealOpen = false;
 
 const urlInput = document.getElementById("supabase-url");
 const keyInput = document.getElementById("supabase-key");
@@ -18,11 +20,17 @@ const authStatus = document.getElementById("auth-status");
 const sessionBox = document.getElementById("session-box");
 
 const loadDataBtn = document.getElementById("load-data");
+const submitAllBtn = document.getElementById("submit-all");
 const dataStatus = document.getElementById("data-status");
+const submissionStatus = document.getElementById("submission-status");
+const revealStatus = document.getElementById("reveal-status");
 const userBox = document.getElementById("user-box");
 const groupBox = document.getElementById("group-box");
 const eventBox = document.getElementById("event-box");
 const fightsBox = document.getElementById("fights-box");
+
+const othersStatus = document.getElementById("others-status");
+const othersPicksBox = document.getElementById("others-picks-box");
 
 function setStatus(el, message) {
   if (el) el.textContent = message;
@@ -210,7 +218,11 @@ function attachFightFormEvents() {
 
 async function savePick(fightId) {
   try {
-    if (!supabaseClient || !currentSession || !currentGroup || !currentEvent) {
+    if (!supabaseClient || !currentSession || !currentGroup || !currentEvent) return;
+
+    if (await hasSubmittedCurrentEvent()) {
+      const statusEl = document.getElementById(`pick-status-${fightId}`);
+      if (statusEl) statusEl.textContent = "Du har redan skickat in dina picks.";
       return;
     }
 
@@ -248,9 +260,7 @@ async function savePick(fightId) {
 
     const { error } = await supabaseClient
       .from("picks")
-      .upsert(payload, {
-        onConflict: "user_id,group_id,event_id,fight_id"
-      });
+      .upsert(payload, { onConflict: "user_id,group_id,event_id,fight_id" });
 
     if (error) {
       statusEl.textContent = "Fel vid sparande: " + error.message;
@@ -262,6 +272,179 @@ async function savePick(fightId) {
     console.error(err);
     const statusEl = document.getElementById(`pick-status-${fightId}`);
     if (statusEl) statusEl.textContent = "Oväntat fel: " + err.message;
+  }
+}
+
+async function hasSubmittedCurrentEvent() {
+  const { data, error } = await supabaseClient
+    .from("event_submissions")
+    .select("*")
+    .eq("user_id", currentSession.user.id)
+    .eq("group_id", currentGroup.id)
+    .eq("event_id", currentEvent.id)
+    .limit(1);
+
+  if (error) return false;
+  return !!(data && data.length > 0);
+}
+
+async function loadSubmissionState() {
+  const { count: memberCount, error: memberError } = await supabaseClient
+    .from("group_members")
+    .select("*", { count: "exact", head: true })
+    .eq("group_id", currentGroup.id);
+
+  if (memberError) {
+    setStatus(submissionStatus, "Fel vid hämtning av medlemmar: " + memberError.message);
+    return;
+  }
+
+  const { count: submittedCount, error: submittedError } = await supabaseClient
+    .from("event_submissions")
+    .select("*", { count: "exact", head: true })
+    .eq("group_id", currentGroup.id)
+    .eq("event_id", currentEvent.id);
+
+  if (submittedError) {
+    setStatus(submissionStatus, "Fel vid hämtning av submissions: " + submittedError.message);
+    return;
+  }
+
+  const ownSubmitted = await hasSubmittedCurrentEvent();
+
+  setStatus(
+    submissionStatus,
+    `${submittedCount || 0} av ${memberCount || 0} har skickat in. Du är ${ownSubmitted ? "klar" : "inte klar"}.`
+  );
+
+  currentRevealOpen = (memberCount || 0) > 0 && submittedCount === memberCount;
+
+  setStatus(
+    revealStatus,
+    currentRevealOpen
+      ? "Alla har skickat in. Picks är nu synliga."
+      : "Picks är dolda tills alla skickat in."
+  );
+}
+
+async function loadOtherUsersPicks() {
+  if (!currentRevealOpen) {
+    othersStatus.textContent = "Dolda tills alla skickat in.";
+    othersPicksBox.innerHTML = "Inget att visa ännu.";
+    return;
+  }
+
+  const { data, error } = await supabaseClient
+    .from("picks")
+    .select("*")
+    .eq("group_id", currentGroup.id)
+    .eq("event_id", currentEvent.id)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    othersStatus.textContent = "Fel vid hämtning av andras picks: " + error.message;
+    return;
+  }
+
+  const grouped = {};
+  (data || []).forEach((pick) => {
+    if (!grouped[pick.user_id]) grouped[pick.user_id] = [];
+    grouped[pick.user_id].push(pick);
+  });
+
+  const userIds = Object.keys(grouped);
+  if (!userIds.length) {
+    othersStatus.textContent = "Inga picks hittades.";
+    othersPicksBox.innerHTML = "Inget att visa ännu.";
+    return;
+  }
+
+  othersStatus.textContent = "Alla picks är nu visade.";
+
+  othersPicksBox.innerHTML = userIds
+    .map((userId) => {
+      const picksHtml = grouped[userId]
+        .map((pick) => {
+          const fight = currentFights.find((f) => f.id === pick.fight_id);
+          const details =
+            pick.method === "decision"
+              ? `Decision (${pick.decision_type})`
+              : `${pick.method} rond ${pick.round_number}`;
+
+          return `
+            <li>
+              ${fight ? `${fight.fighter_a} vs ${fight.fighter_b}` : pick.fight_id}: 
+              ${pick.picked_winner} via ${details}
+            </li>
+          `;
+        })
+        .join("");
+
+      return `
+        <div class="fight-item">
+          <strong>User:</strong> ${userId}
+          <ul>${picksHtml}</ul>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+async function submitAllPicks() {
+  try {
+    if (!supabaseClient || !currentSession || !currentGroup || !currentEvent) {
+      setStatus(dataStatus, "Ladda appdata först.");
+      return;
+    }
+
+    const ownSubmitted = await hasSubmittedCurrentEvent();
+    if (ownSubmitted) {
+      setStatus(dataStatus, "Du har redan skickat in alla picks.");
+      await loadSubmissionState();
+      return;
+    }
+
+    const { data: ownPicks, error: ownPicksError } = await supabaseClient
+      .from("picks")
+      .select("*")
+      .eq("user_id", currentSession.user.id)
+      .eq("group_id", currentGroup.id)
+      .eq("event_id", currentEvent.id);
+
+    if (ownPicksError) {
+      setStatus(dataStatus, "Fel vid kontroll av picks: " + ownPicksError.message);
+      return;
+    }
+
+    currentOwnPicks = ownPicks || [];
+
+    if (currentOwnPicks.length !== currentFights.length) {
+      setStatus(dataStatus, `Du måste spara picks för alla matcher först. Klart: ${currentOwnPicks.length}/${currentFights.length}`);
+      return;
+    }
+
+    const { error } = await supabaseClient
+      .from("event_submissions")
+      .upsert(
+        {
+          user_id: currentSession.user.id,
+          group_id: currentGroup.id,
+          event_id: currentEvent.id
+        },
+        { onConflict: "user_id,group_id,event_id" }
+      );
+
+    if (error) {
+      setStatus(dataStatus, "Fel vid submit: " + error.message);
+      return;
+    }
+
+    setStatus(dataStatus, "Alla picks skickades in.");
+    await loadSubmissionState();
+    await loadOtherUsersPicks();
+  } catch (err) {
+    console.error(err);
+    setStatus(dataStatus, "Oväntat submit-fel: " + err.message);
   }
 }
 
@@ -346,8 +529,10 @@ async function loadAppData() {
       return;
     }
 
+    currentOwnPicks = existingPicks || [];
+
     const picksMap = {};
-    (existingPicks || []).forEach((pick) => {
+    currentOwnPicks.forEach((pick) => {
       picksMap[pick.fight_id] = pick;
     });
 
@@ -362,6 +547,8 @@ async function loadAppData() {
       .join("");
 
     attachFightFormEvents();
+    await loadSubmissionState();
+    await loadOtherUsersPicks();
     setStatus(dataStatus, "Appdata laddad.");
   } catch (err) {
     console.error(err);
@@ -399,10 +586,7 @@ signUpBtn.addEventListener("click", async () => {
     const email = emailInput.value.trim();
     const password = passwordInput.value.trim();
 
-    const { data, error } = await supabaseClient.auth.signUp({
-      email,
-      password
-    });
+    const { data, error } = await supabaseClient.auth.signUp({ email, password });
 
     if (error) {
       setStatus(authStatus, "Signup fel: " + error.message);
@@ -427,10 +611,7 @@ signInBtn.addEventListener("click", async () => {
     const email = emailInput.value.trim();
     const password = passwordInput.value.trim();
 
-    const { error } = await supabaseClient.auth.signInWithPassword({
-      email,
-      password
-    });
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
 
     if (error) {
       setStatus(authStatus, "Login fel: " + error.message);
@@ -463,14 +644,20 @@ signOutBtn.addEventListener("click", async () => {
     currentGroup = null;
     currentEvent = null;
     currentFights = [];
+    currentOwnPicks = [];
+    currentRevealOpen = false;
 
     sessionBox.textContent = "Ingen aktiv session.";
     userBox.textContent = "Ingen data ännu.";
     groupBox.textContent = "Ingen data ännu.";
     eventBox.textContent = "Ingen data ännu.";
     fightsBox.innerHTML = "Ingen data ännu.";
+    othersPicksBox.innerHTML = "Inget att visa ännu.";
+    othersStatus.textContent = "Dolda tills alla skickat in.";
     setStatus(authStatus, "Utloggad.");
     setStatus(dataStatus, "");
+    setStatus(submissionStatus, "");
+    setStatus(revealStatus, "");
   } catch (err) {
     console.error(err);
     setStatus(authStatus, "Logout exception: " + err.message);
@@ -478,5 +665,6 @@ signOutBtn.addEventListener("click", async () => {
 });
 
 loadDataBtn.addEventListener("click", loadAppData);
+submitAllBtn.addEventListener("click", submitAllPicks);
 
 initSupabase();
