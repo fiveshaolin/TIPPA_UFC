@@ -224,13 +224,15 @@ async function hasSubmittedCurrentEvent() {
     .select("*")
     .eq("user_id", currentSession.user.id)
     .eq("group_id", currentGroup.id)
-    .eq("event_id", currentEvent.id)
-    .limit(1);
+    .eq("event_id", currentEvent.id);
 
   if (error) {
-    console.error(error);
+    console.error("Submission check error:", error);
     return false;
   }
+
+  console.log("hasSubmittedCurrentEvent user:", currentSession.user.email);
+  console.log("hasSubmittedCurrentEvent rows:", data);
 
   return !!(data && data.length > 0);
 }
@@ -310,23 +312,30 @@ async function loadSubmissionState() {
     return;
   }
 
-  const { count: submittedCount, error: submittedError } = await supabaseClient
+  const { data: submissions, error: submissionsError } = await supabaseClient
     .from("event_submissions")
-    .select("*", { count: "exact", head: true })
+    .select("*")
     .eq("group_id", currentGroup.id)
     .eq("event_id", currentEvent.id);
 
-  if (submittedError) {
-    console.error(submittedError);
-    setStatus(submissionStatus, "Fel vid hämtning av submissions: " + submittedError.message);
+  if (submissionsError) {
+    console.error(submissionsError);
+    setStatus(submissionStatus, "Fel vid hämtning av submissions: " + submissionsError.message);
     return;
   }
 
-  const ownSubmitted = await hasSubmittedCurrentEvent();
+  console.log("submission rows visible to", currentSession.user.email, submissions);
+
+  const submittedCount = submissions ? submissions.length : 0;
+  const ownSubmitted = submissions.some((row) => row.user_id === currentSession.user.id);
+
+  console.log("memberCount:", memberCount);
+  console.log("submittedCount:", submittedCount);
+  console.log("ownSubmitted:", ownSubmitted);
 
   setStatus(
     submissionStatus,
-    (submittedCount || 0) + " av " + (memberCount || 0) + " har skickat in. Du är " + (ownSubmitted ? "klar" : "inte klar") + "."
+    submittedCount + " av " + (memberCount || 0) + " har skickat in. Du är " + (ownSubmitted ? "klar" : "inte klar") + "."
   );
 
   currentRevealOpen = (memberCount || 0) > 0 && submittedCount === memberCount;
@@ -659,11 +668,12 @@ signInBtn.addEventListener("click", async () => {
     const email = emailInput.value.trim();
     const password = passwordInput.value.trim();
 
-    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    const result = await supabaseClient.auth.signInWithPassword({ email, password });
+    console.log("Login success:", result);
 
-    if (error) {
-      console.error(error);
-      setStatus(authStatus, "Login fel: " + error.message);
+    if (result.error) {
+      console.error(result.error);
+      setStatus(authStatus, "Login fel: " + result.error.message);
       return;
     }
 
