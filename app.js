@@ -5,7 +5,7 @@ let currentEvent = null;
 let currentFights = [];
 let currentOwnPicks = [];
 let currentRevealOpen = false;
-let currentGroupMembers = [];
+let currentProfiles = [];
 
 const urlInput = document.getElementById("supabase-url");
 const keyInput = document.getElementById("supabase-key");
@@ -62,19 +62,17 @@ function setStoredItem(key, value) {
   }
 }
 
-function setStaticEnglishLabels() {
-  const submittedHeading = document.querySelector("#others-picks-box")?.closest("section, div")?.querySelector("h2");
-  if (submittedHeading && submittedHeading.textContent.trim().toLowerCase().includes("picks")) {
-    submittedHeading.textContent = "Submitted picks";
-  }
-}
+function getDisplayName(userId) {
+  const profile = currentProfiles.find((p) => p.id === userId);
 
-function getMemberLabel(userId) {
-  const member = currentGroupMembers.find((m) => m.user_id === userId);
-  if (member && member.email) return member.email;
+  if (profile && profile.display_name && profile.display_name.trim()) {
+    return profile.display_name.trim();
+  }
+
   if (currentSession && currentSession.user && currentSession.user.id === userId) {
     return currentSession.user.email;
   }
+
   return userId;
 }
 
@@ -354,7 +352,20 @@ async function loadSubmissionState() {
   );
 }
 
-async function loadOtherUsersPicks() {
+function describePick(pick) {
+  if (pick.method === "decision") {
+    return "Decision (" + pick.decision_type + ")";
+  }
+  if (pick.method === "ko_tko") {
+    return "KO/TKO round " + pick.round_number;
+  }
+  if (pick.method === "sub") {
+    return "Submission round " + pick.round_number;
+  }
+  return pick.method || "";
+}
+
+async function loadSubmittedPicks() {
   if (!currentRevealOpen) {
     othersStatus.textContent = "Hidden until everyone has submitted.";
     othersPicksBox.innerHTML = "Nothing to show yet.";
@@ -395,25 +406,11 @@ async function loadOtherUsersPicks() {
 
     grouped[userId].forEach((pick) => {
       const fight = currentFights.find((f) => f.id === pick.fight_id);
-      let details = "";
-
-      if (pick.method === "decision") {
-        details = "Decision (" + pick.decision_type + ")";
-      } else if (pick.method === "ko_tko") {
-        details = "KO/TKO round " + pick.round_number;
-      } else if (pick.method === "sub") {
-        details = "Submission round " + pick.round_number;
-      } else {
-        details = pick.method;
-      }
-
-      picksHtml += "<li>" +
-        (fight ? (fight.fighter_a + " vs " + fight.fighter_b) : pick.fight_id) +
-        ": " + pick.picked_winner + " via " + details +
-        "</li>";
+      const fightLabel = fight ? (fight.fighter_a + " vs " + fight.fighter_b) : pick.fight_id;
+      picksHtml += "<li>" + fightLabel + ": " + pick.picked_winner + " via " + describePick(pick) + "</li>";
     });
 
-    html += '<div class="fight-item"><strong>' + getMemberLabel(userId) + '</strong><ul>' + picksHtml + '</ul></div>';
+    html += '<div class="fight-item"><strong>' + getDisplayName(userId) + '</strong><ul>' + picksHtml + '</ul></div>';
   });
 
   othersStatus.textContent = "All submitted picks are now visible.";
@@ -473,7 +470,7 @@ async function submitAllPicks() {
 
     setStatus(dataStatus, "All picks submitted.");
     await loadSubmissionState();
-    await loadOtherUsersPicks();
+    await loadSubmittedPicks();
   } catch (err) {
     console.error(err);
     setStatus(dataStatus, "Unexpected submit error: " + err.message);
@@ -545,19 +542,37 @@ async function loadCurrentGroup() {
   return groupResult.data;
 }
 
-async function loadGroupMembers() {
-  const { data, error } = await supabaseClient
+async function loadProfilesForCurrentGroup() {
+  const memberIdsResult = await supabaseClient
     .from("group_members")
-    .select("user_id, email")
+    .select("user_id")
     .eq("group_id", currentGroup.id);
 
-  if (error) {
-    console.error(error);
-    currentGroupMembers = [];
+  if (memberIdsResult.error) {
+    console.error(memberIdsResult.error);
+    currentProfiles = [];
     return;
   }
 
-  currentGroupMembers = data || [];
+  const memberIds = (memberIdsResult.data || []).map((row) => row.user_id);
+
+  if (!memberIds.length) {
+    currentProfiles = [];
+    return;
+  }
+
+  const profilesResult = await supabaseClient
+    .from("profiles")
+    .select("id, display_name")
+    .in("id", memberIds);
+
+  if (profilesResult.error) {
+    console.error(profilesResult.error);
+    currentProfiles = [];
+    return;
+  }
+
+  currentProfiles = profilesResult.data || [];
 }
 
 async function loadAppData() {
@@ -590,7 +605,7 @@ async function loadAppData() {
       return;
     }
 
-    await loadGroupMembers();
+    await loadProfilesForCurrentGroup();
 
     const eventsResult = await supabaseClient
       .from("events")
@@ -651,7 +666,7 @@ async function loadAppData() {
 
     attachFightFormEvents();
     await loadSubmissionState();
-    await loadOtherUsersPicks();
+    await loadSubmittedPicks();
     setStatus(dataStatus, "App data loaded.");
   } catch (err) {
     console.error(err);
@@ -752,7 +767,7 @@ signOutBtn.addEventListener("click", async () => {
     currentFights = [];
     currentOwnPicks = [];
     currentRevealOpen = false;
-    currentGroupMembers = [];
+    currentProfiles = [];
 
     sessionBox.textContent = "No active session.";
     userBox.textContent = "No data yet.";
@@ -777,5 +792,4 @@ loadDataBtn.addEventListener("click", loadAppData);
 submitAllBtn.addEventListener("click", submitAllPicks);
 changePasswordBtn.addEventListener("click", changePassword);
 
-setStaticEnglishLabels();
 initSupabase();
