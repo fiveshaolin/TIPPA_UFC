@@ -6,6 +6,13 @@ let currentFights = [];
 let currentOwnPicks = [];
 let currentRevealOpen = false;
 let currentProfiles = [];
+let currentLeaderboard = [];
+
+let pickDrafts = {};
+let saveTimers = {};
+let saveStateByFight = {};
+let isSubmittedForCurrentEvent = false;
+let currentView = "event";
 
 const urlInput = document.getElementById("supabase-url");
 const keyInput = document.getElementById("supabase-key");
@@ -38,6 +45,17 @@ const fightsBox = document.getElementById("fights-box");
 const othersStatus = document.getElementById("others-status");
 const othersPicksBox = document.getElementById("others-picks-box");
 
+const eventTabBtn = document.getElementById("tab-event");
+const leaderboardTabBtn = document.getElementById("tab-leaderboard");
+const profileTabBtn = document.getElementById("tab-profile");
+const eventView = document.getElementById("view-event");
+const leaderboardView = document.getElementById("view-leaderboard");
+const profileView = document.getElementById("view-profile");
+const leaderboardBox = document.getElementById("leaderboard-box");
+const stickyBar = document.getElementById("sticky-submit-bar");
+const stickySaveState = document.getElementById("sticky-save-state");
+const stickySubmitBtn = document.getElementById("sticky-submit-btn");
+
 function setStatus(el, message) {
   if (el) el.textContent = message;
   if (message) console.log(message);
@@ -64,103 +82,107 @@ function setStoredItem(key, value) {
 
 function getDisplayName(userId) {
   const profile = currentProfiles.find((p) => p.id === userId);
-
-  if (profile && profile.display_name && profile.display_name.trim()) {
-    return profile.display_name.trim();
-  }
-
-  if (currentSession && currentSession.user && currentSession.user.id === userId) {
-    return currentSession.user.email;
-  }
-
+  if (profile && profile.display_name && profile.display_name.trim()) return profile.display_name.trim();
+  if (currentSession && currentSession.user && currentSession.user.id === userId) return currentSession.user.email;
   return userId;
 }
 
-function initSupabase() {
-  try {
-    const savedUrl = getStoredItem("supabase_url");
-    const savedKey = getStoredItem("supabase_key");
+function switchView(viewName) {
+  currentView = viewName;
 
-    if (savedUrl) urlInput.value = savedUrl;
-    if (savedKey) keyInput.value = savedKey;
+  if (eventView) eventView.hidden = viewName !== "event";
+  if (leaderboardView) leaderboardView.hidden = viewName !== "leaderboard";
+  if (profileView) profileView.hidden = viewName !== "profile";
 
-    if (!savedUrl || !savedKey) {
-      setStatus(configStatus, "Paste your Supabase Project URL and Publishable Key.");
-      return;
-    }
+  if (eventTabBtn) eventTabBtn.classList.toggle("active", viewName === "event");
+  if (leaderboardTabBtn) leaderboardTabBtn.classList.toggle("active", viewName === "leaderboard");
+  if (profileTabBtn) profileTabBtn.classList.toggle("active", viewName === "profile");
 
-    if (!window.supabase) {
-      setStatus(configStatus, "Supabase library failed to load.");
-      return;
-    }
-
-    const { createClient } = window.supabase;
-    supabaseClient = createClient(savedUrl, savedKey);
-    setStatus(configStatus, "Supabase connection saved.");
-    refreshSession();
-  } catch (err) {
-    console.error(err);
-    setStatus(configStatus, "Initialization error: " + err.message);
-  }
+  updateStickyBar();
 }
 
-async function refreshSession() {
-  try {
-    if (!supabaseClient) {
-      sessionBox.textContent = "No active session.";
-      currentSession = null;
-      return null;
-    }
+function initTabs() {
+  if (eventTabBtn) eventTabBtn.addEventListener("click", () => switchView("event"));
+  if (leaderboardTabBtn) leaderboardTabBtn.addEventListener("click", () => switchView("leaderboard"));
+  if (profileTabBtn) profileTabBtn.addEventListener("click", () => switchView("profile"));
+}
 
-    const { data, error } = await supabaseClient.auth.getSession();
+function getDraftFromInputs(fightId) {
+  const winnerEl = document.querySelector('[data-fight-id="' + fightId + '"][data-field="picked_winner"]');
+  const methodEl = document.querySelector('[data-fight-id="' + fightId + '"][data-field="method"]');
+  const roundEl = document.querySelector('[data-fight-id="' + fightId + '"][data-field="round_number"]');
+  const decisionEl = document.querySelector('[data-fight-id="' + fightId + '"][data-field="decision_type"]');
+  const method = methodEl ? methodEl.value : "";
 
-    if (error) {
-      console.error(error);
-      setStatus(authStatus, "Could not read session: " + error.message);
-      sessionBox.textContent = "No active session.";
-      currentSession = null;
-      return null;
-    }
+  return {
+    picked_winner: winnerEl ? winnerEl.value : "",
+    method,
+    round_number: method === "ko_tko" || method === "sub" ? (roundEl ? roundEl.value : "") : "",
+    decision_type: method === "decision" ? (decisionEl ? decisionEl.value : "") : ""
+  };
+}
 
-    if (!data.session) {
-      sessionBox.textContent = "No active session.";
-      setStatus(authStatus, "Not signed in.");
-      currentSession = null;
-      return null;
-    }
+function isFightDraftComplete(draft) {
+  if (!draft || !draft.picked_winner || !draft.method) return false;
+  if ((draft.method === "ko_tko" || draft.method === "sub") && !draft.round_number) return false;
+  if (draft.method === "decision" && !draft.decision_type) return false;
+  return true;
+}
 
-    currentSession = data.session;
-    sessionBox.textContent = JSON.stringify(
-      {
-        user_id: data.session.user.id,
-        email: data.session.user.email
-      },
-      null,
-      2
-    );
+function areAllDraftsComplete() {
+  return currentFights.length > 0 && currentFights.every((fight) => isFightDraftComplete(pickDrafts[fight.id]));
+}
 
-    setStatus(authStatus, "Signed in as " + data.session.user.email);
-    return data.session;
-  } catch (err) {
-    console.error(err);
-    setStatus(authStatus, "Session error: " + err.message);
-    return null;
-  }
+function isAnyDraftSaving() {
+  return Object.values(saveStateByFight).some((value) => value === "Saving...");
+}
+
+function hasAnyDraftError() {
+  return Object.values(saveStateByFight).some((value) => String(value || "").startsWith("Error"));
+}
+
+function getStickyStateMessage() {
+  if (!currentSession || !currentGroup || !currentEvent) return "Load event to start.";
+  if (isSubmittedForCurrentEvent) return "Your picks are submitted and locked.";
+  if (isAnyDraftSaving()) return "Saving picks...";
+  if (hasAnyDraftError()) return "Some picks could not be saved.";
+  if (!areAllDraftsComplete()) return "Complete all picks to submit.";
+  return "All picks saved.";
+}
+
+function updateSubmitButtonState() {
+  const disabled =
+    isSubmittedForCurrentEvent ||
+    isAnyDraftSaving() ||
+    hasAnyDraftError() ||
+    !areAllDraftsComplete();
+
+  if (submitAllBtn) submitAllBtn.disabled = disabled;
+  if (stickySubmitBtn) stickySubmitBtn.disabled = disabled;
+  if (stickySaveState) stickySaveState.textContent = getStickyStateMessage();
+}
+
+function updateStickyBar() {
+  if (!stickyBar) return;
+  stickyBar.hidden = currentView !== "event" || !currentSession || !currentEvent;
+  updateSubmitButtonState();
 }
 
 function renderPickForm(fight, existingPick) {
-  const selectedWinner = existingPick?.picked_winner || "";
-  const selectedMethod = existingPick?.method || "";
-  const selectedRound = existingPick?.round_number || "";
-  const selectedDecision = existingPick?.decision_type || "";
+  const draft = pickDrafts[fight.id] || existingPick || {};
+  const selectedWinner = draft.picked_winner || "";
+  const selectedMethod = draft.method || "";
+  const selectedRound = draft.round_number || "";
+  const selectedDecision = draft.decision_type || "";
+  const disabledAttr = isSubmittedForCurrentEvent ? "disabled" : "";
 
   return `
-    <div class="fight-item">
+    <article class="fight-item card">
       <div class="fight-title"><strong>Fight ${fight.bout_order}:</strong> ${fight.fighter_a} vs ${fight.fighter_b}</div>
 
       <label>
         Winner
-        <select data-fight-id="${fight.id}" data-field="picked_winner">
+        <select data-fight-id="${fight.id}" data-field="picked_winner" ${disabledAttr}>
           <option value="">Select winner</option>
           <option value="${fight.fighter_a}" ${selectedWinner === fight.fighter_a ? "selected" : ""}>${fight.fighter_a}</option>
           <option value="${fight.fighter_b}" ${selectedWinner === fight.fighter_b ? "selected" : ""}>${fight.fighter_b}</option>
@@ -169,7 +191,7 @@ function renderPickForm(fight, existingPick) {
 
       <label>
         Method
-        <select data-fight-id="${fight.id}" data-field="method" class="method-select">
+        <select data-fight-id="${fight.id}" data-field="method" class="method-select" ${disabledAttr}>
           <option value="">Select method</option>
           <option value="ko_tko" ${selectedMethod === "ko_tko" ? "selected" : ""}>KO/TKO</option>
           <option value="sub" ${selectedMethod === "sub" ? "selected" : ""}>Submission</option>
@@ -179,7 +201,7 @@ function renderPickForm(fight, existingPick) {
 
       <label class="round-wrapper" data-fight-id="${fight.id}" style="${selectedMethod === "ko_tko" || selectedMethod === "sub" ? "" : "display:none;"}">
         Round
-        <select data-fight-id="${fight.id}" data-field="round_number">
+        <select data-fight-id="${fight.id}" data-field="round_number" ${disabledAttr}>
           <option value="">Select round</option>
           <option value="1" ${String(selectedRound) === "1" ? "selected" : ""}>1</option>
           <option value="2" ${String(selectedRound) === "2" ? "selected" : ""}>2</option>
@@ -191,46 +213,90 @@ function renderPickForm(fight, existingPick) {
 
       <label class="decision-wrapper" data-fight-id="${fight.id}" style="${selectedMethod === "decision" ? "" : "display:none;"}">
         Decision type
-        <select data-fight-id="${fight.id}" data-field="decision_type">
+        <select data-fight-id="${fight.id}" data-field="decision_type" ${disabledAttr}>
           <option value="">Select decision type</option>
           <option value="unanimous" ${selectedDecision === "unanimous" ? "selected" : ""}>Unanimous</option>
           <option value="split" ${selectedDecision === "split" ? "selected" : ""}>Split</option>
         </select>
       </label>
 
-      <button class="save-pick-btn" data-fight-id="${fight.id}">Save pick</button>
-      <p class="pick-status" id="pick-status-${fight.id}"></p>
-    </div>
+      <p class="pick-status" id="pick-status-${fight.id}">${saveStateByFight[fight.id] || ""}</p>
+    </article>
   `;
 }
 
-function attachFightFormEvents() {
-  document.querySelectorAll(".method-select").forEach((select) => {
-    select.addEventListener("change", (event) => {
-      const fightId = event.target.dataset.fightId;
-      const method = event.target.value;
+function renderEventScreen() {
+  const picksMap = {};
+  currentOwnPicks.forEach((pick) => {
+    picksMap[pick.fight_id] = pick;
+  });
 
+  if (!currentEvent) {
+    fightsBox.innerHTML = '<div class="card empty-state">No event found.</div>';
+    updateStickyBar();
+    return;
+  }
+
+  if (!currentFights.length) {
+    fightsBox.innerHTML = '<div class="card empty-state">No fights found.</div>';
+    updateStickyBar();
+    return;
+  }
+
+  fightsBox.innerHTML = currentFights.map((fight) => renderPickForm(fight, picksMap[fight.id])).join("");
+  attachFightFormEvents();
+  updateStickyBar();
+}
+
+function attachFightFormEvents() {
+  document.querySelectorAll("#fights-box select").forEach((select) => {
+    select.addEventListener("change", async (event) => {
+      const fightId = event.target.dataset.fightId;
+      const field = event.target.dataset.field;
+      if (!fightId || !field || isSubmittedForCurrentEvent) return;
+
+      const methodEl = document.querySelector('[data-fight-id="' + fightId + '"][data-field="method"]');
+      const method = methodEl ? methodEl.value : "";
       const roundWrapper = document.querySelector('.round-wrapper[data-fight-id="' + fightId + '"]');
       const decisionWrapper = document.querySelector('.decision-wrapper[data-fight-id="' + fightId + '"]');
+      const roundEl = document.querySelector('[data-fight-id="' + fightId + '"][data-field="round_number"]');
+      const decisionEl = document.querySelector('[data-fight-id="' + fightId + '"][data-field="decision_type"]');
 
       if (method === "ko_tko" || method === "sub") {
-        roundWrapper.style.display = "block";
-        decisionWrapper.style.display = "none";
+        if (roundWrapper) roundWrapper.style.display = "block";
+        if (decisionWrapper) decisionWrapper.style.display = "none";
+        if (decisionEl) decisionEl.value = "";
       } else if (method === "decision") {
-        roundWrapper.style.display = "none";
-        decisionWrapper.style.display = "block";
+        if (roundWrapper) roundWrapper.style.display = "none";
+        if (decisionWrapper) decisionWrapper.style.display = "block";
+        if (roundEl) roundEl.value = "";
       } else {
-        roundWrapper.style.display = "none";
-        decisionWrapper.style.display = "none";
+        if (roundWrapper) roundWrapper.style.display = "none";
+        if (decisionWrapper) decisionWrapper.style.display = "none";
+        if (roundEl) roundEl.value = "";
+        if (decisionEl) decisionEl.value = "";
       }
-    });
-  });
 
-  document.querySelectorAll(".save-pick-btn").forEach((button) => {
-    button.addEventListener("click", async (event) => {
-      await savePick(event.target.dataset.fightId);
+      pickDrafts[fightId] = getDraftFromInputs(fightId);
+      queueAutosave(fightId);
+      updateSubmitButtonState();
     });
   });
+}
+
+function queueAutosave(fightId) {
+  if (saveTimers[fightId]) clearTimeout(saveTimers[fightId]);
+
+  saveStateByFight[fightId] = isFightDraftComplete(pickDrafts[fightId]) ? "Saving..." : "Incomplete pick";
+  const statusEl = document.getElementById("pick-status-" + fightId);
+  if (statusEl) statusEl.textContent = saveStateByFight[fightId];
+  updateSubmitButtonState();
+
+  if (!isFightDraftComplete(pickDrafts[fightId])) return;
+
+  saveTimers[fightId] = setTimeout(() => {
+    autosavePick(fightId);
+  }, 400);
 }
 
 async function hasSubmittedCurrentEvent() {
@@ -249,51 +315,33 @@ async function hasSubmittedCurrentEvent() {
   return !!(data && data.length > 0);
 }
 
-async function savePick(fightId) {
+async function autosavePick(fightId) {
   try {
-    if (!supabaseClient || !currentSession || !currentGroup || !currentEvent) return;
+    if (!supabaseClient || !currentSession || !currentGroup || !currentEvent || isSubmittedForCurrentEvent) return;
 
-    if (await hasSubmittedCurrentEvent()) {
-      const statusEl = document.getElementById("pick-status-" + fightId);
-      if (statusEl) statusEl.textContent = "You have already submitted your picks.";
-      return;
-    }
-
-    const winnerEl = document.querySelector('[data-fight-id="' + fightId + '"][data-field="picked_winner"]');
-    const methodEl = document.querySelector('[data-fight-id="' + fightId + '"][data-field="method"]');
-    const roundEl = document.querySelector('[data-fight-id="' + fightId + '"][data-field="round_number"]');
-    const decisionEl = document.querySelector('[data-fight-id="' + fightId + '"][data-field="decision_type"]');
+    const draft = pickDrafts[fightId];
     const statusEl = document.getElementById("pick-status-" + fightId);
 
-    const winner = winnerEl ? winnerEl.value : "";
-    const method = methodEl ? methodEl.value : "";
-    const roundNumberValue = roundEl ? roundEl.value : "";
-    const decisionType = decisionEl ? decisionEl.value : "";
-
-    if (!winner || !method) {
-      statusEl.textContent = "Select both winner and method.";
+    if (!isFightDraftComplete(draft)) {
+      saveStateByFight[fightId] = "Incomplete pick";
+      if (statusEl) statusEl.textContent = saveStateByFight[fightId];
+      updateSubmitButtonState();
       return;
     }
 
-    if ((method === "ko_tko" || method === "sub") && !roundNumberValue) {
-      statusEl.textContent = "Select a round.";
-      return;
-    }
-
-    if (method === "decision" && !decisionType) {
-      statusEl.textContent = "Select a decision type.";
-      return;
-    }
+    saveStateByFight[fightId] = "Saving...";
+    if (statusEl) statusEl.textContent = saveStateByFight[fightId];
+    updateSubmitButtonState();
 
     const payload = {
       user_id: currentSession.user.id,
       group_id: currentGroup.id,
       event_id: currentEvent.id,
       fight_id: fightId,
-      picked_winner: winner,
-      method: method,
-      round_number: method === "decision" ? null : Number(roundNumberValue),
-      decision_type: method === "decision" ? decisionType : null
+      picked_winner: draft.picked_winner,
+      method: draft.method,
+      round_number: draft.method === "decision" ? null : Number(draft.round_number),
+      decision_type: draft.method === "decision" ? draft.decision_type : null
     };
 
     const { error } = await supabaseClient
@@ -302,13 +350,29 @@ async function savePick(fightId) {
 
     if (error) {
       console.error(error);
-      statusEl.textContent = "Error saving pick: " + error.message;
+      saveStateByFight[fightId] = "Error saving: " + error.message;
+      if (statusEl) statusEl.textContent = saveStateByFight[fightId];
+      updateSubmitButtonState();
       return;
     }
 
-    statusEl.textContent = "Pick saved.";
+    saveStateByFight[fightId] = "Saved";
+    if (statusEl) statusEl.textContent = saveStateByFight[fightId];
+
+    const existingIndex = currentOwnPicks.findIndex((p) => p.fight_id === fightId);
+    if (existingIndex >= 0) {
+      currentOwnPicks[existingIndex] = { ...currentOwnPicks[existingIndex], ...payload };
+    } else {
+      currentOwnPicks.push(payload);
+    }
+
+    updateSubmitButtonState();
   } catch (err) {
     console.error(err);
+    saveStateByFight[fightId] = "Error saving: " + err.message;
+    const statusEl = document.getElementById("pick-status-" + fightId);
+    if (statusEl) statusEl.textContent = saveStateByFight[fightId];
+    updateSubmitButtonState();
   }
 }
 
@@ -339,6 +403,8 @@ async function loadSubmissionState() {
   const submittedCount = submissions ? submissions.length : 0;
   const ownSubmitted = submissions.some((row) => row.user_id === currentSession.user.id);
 
+  isSubmittedForCurrentEvent = ownSubmitted;
+
   setStatus(
     submissionStatus,
     submittedCount + " of " + (memberCount || 0) + " have submitted. You are " + (ownSubmitted ? "done" : "not done") + "."
@@ -350,18 +416,14 @@ async function loadSubmissionState() {
     revealStatus,
     currentRevealOpen ? "Everyone has submitted. Picks are now visible." : "Picks stay hidden until everyone has submitted."
   );
+
+  updateSubmitButtonState();
 }
 
 function describePick(pick) {
-  if (pick.method === "decision") {
-    return "Decision (" + pick.decision_type + ")";
-  }
-  if (pick.method === "ko_tko") {
-    return "KO/TKO round " + pick.round_number;
-  }
-  if (pick.method === "sub") {
-    return "Submission round " + pick.round_number;
-  }
+  if (pick.method === "decision") return "Decision (" + pick.decision_type + ")";
+  if (pick.method === "ko_tko") return "KO/TKO round " + pick.round_number;
+  if (pick.method === "sub") return "Submission round " + pick.round_number;
   return pick.method || "";
 }
 
@@ -403,18 +465,66 @@ async function loadSubmittedPicks() {
 
   userIds.forEach((userId) => {
     let picksHtml = "";
-
     grouped[userId].forEach((pick) => {
       const fight = currentFights.find((f) => f.id === pick.fight_id);
-      const fightLabel = fight ? (fight.fighter_a + " vs " + fight.fighter_b) : pick.fight_id;
+      const fightLabel = fight ? fight.fighter_a + " vs " + fight.fighter_b : pick.fight_id;
       picksHtml += "<li>" + fightLabel + ": " + pick.picked_winner + " via " + describePick(pick) + "</li>";
     });
-
-    html += '<div class="fight-item"><strong>' + getDisplayName(userId) + '</strong><ul>' + picksHtml + '</ul></div>';
+    html += '<section class="card submitted-picks-card"><strong>' + getDisplayName(userId) + '</strong><ul>' + picksHtml + '</ul></section>';
   });
 
   othersStatus.textContent = "All submitted picks are now visible.";
   othersPicksBox.innerHTML = html;
+}
+
+function renderLeaderboard() {
+  if (!leaderboardBox) return;
+
+  if (!currentLeaderboard.length) {
+    leaderboardBox.innerHTML = '<div class="card empty-state">No leaderboard data yet.</div>';
+    return;
+  }
+
+  leaderboardBox.innerHTML = currentLeaderboard
+    .map((row, index) => {
+      const name = getDisplayName(row.user_id);
+      const total = row.total_points ?? 0;
+      const previous = row.previous_total ?? 0;
+      const lastEvent = row.last_event_points ?? 0;
+      const breakdown = Array.isArray(row.breakdown) ? row.breakdown.join(" + ") : "";
+
+      return `
+        <details class="card leaderboard-card">
+          <summary>
+            <div>
+              <div class="leaderboard-rank">#${index + 1} ${name}</div>
+              <div class="leaderboard-subline">Previous ${previous} · Last event ${lastEvent}</div>
+            </div>
+            <div class="leaderboard-total">${total}</div>
+          </summary>
+          <div class="leaderboard-breakdown">${breakdown || "No breakdown yet."}</div>
+        </details>
+      `;
+    })
+    .join("");
+}
+
+async function loadLeaderboard() {
+  const scoresResult = await supabaseClient
+    .from("leaderboard")
+    .select("*")
+    .eq("group_id", currentGroup.id)
+    .order("total_points", { ascending: false });
+
+  if (scoresResult.error) {
+    console.error(scoresResult.error);
+    currentLeaderboard = [];
+    renderLeaderboard();
+    return;
+  }
+
+  currentLeaderboard = scoresResult.data || [];
+  renderLeaderboard();
 }
 
 async function submitAllPicks() {
@@ -424,30 +534,24 @@ async function submitAllPicks() {
       return;
     }
 
-    const ownSubmitted = await hasSubmittedCurrentEvent();
-    if (ownSubmitted) {
+    if (isSubmittedForCurrentEvent) {
       setStatus(dataStatus, "You have already submitted all picks.");
       await loadSubmissionState();
       return;
     }
 
-    const { data: ownPicks, error: ownPicksError } = await supabaseClient
-      .from("picks")
-      .select("*")
-      .eq("user_id", currentSession.user.id)
-      .eq("group_id", currentGroup.id)
-      .eq("event_id", currentEvent.id);
-
-    if (ownPicksError) {
-      console.error(ownPicksError);
-      setStatus(dataStatus, "Error checking picks: " + ownPicksError.message);
+    if (isAnyDraftSaving()) {
+      setStatus(dataStatus, "Please wait until all picks are saved.");
       return;
     }
 
-    currentOwnPicks = ownPicks || [];
+    if (hasAnyDraftError()) {
+      setStatus(dataStatus, "Fix save errors before submitting.");
+      return;
+    }
 
-    if (currentOwnPicks.length !== currentFights.length) {
-      setStatus(dataStatus, "You must save picks for all fights first. Done: " + currentOwnPicks.length + "/" + currentFights.length);
+    if (!areAllDraftsComplete()) {
+      setStatus(dataStatus, "Complete all picks before submitting.");
       return;
     }
 
@@ -468,7 +572,13 @@ async function submitAllPicks() {
       return;
     }
 
+    isSubmittedForCurrentEvent = true;
+    document.querySelectorAll("#fights-box select").forEach((el) => {
+      el.disabled = true;
+    });
+
     setStatus(dataStatus, "All picks submitted.");
+    updateSubmitButtonState();
     await loadSubmissionState();
     await loadSubmittedPicks();
   } catch (err) {
@@ -491,14 +601,12 @@ async function changePassword() {
     }
 
     const newPassword = newPasswordInput.value.trim();
-
     if (newPassword.length < 6) {
       setStatus(passwordStatus, "Password must be at least 6 characters.");
       return;
     }
 
     const { error } = await supabaseClient.auth.updateUser({ password: newPassword });
-
     if (error) {
       console.error(error);
       setStatus(passwordStatus, "Error changing password: " + error.message);
@@ -555,7 +663,6 @@ async function loadProfilesForCurrentGroup() {
   }
 
   const memberIds = (memberIdsResult.data || []).map((row) => row.user_id);
-
   if (!memberIds.length) {
     currentProfiles = [];
     return;
@@ -588,20 +695,14 @@ async function loadAppData() {
       return;
     }
 
-    userBox.textContent = JSON.stringify(
-      {
-        id: session.user.id,
-        email: session.user.email
-      },
-      null,
-      2
-    );
+    userBox.textContent = JSON.stringify({ id: session.user.id, email: session.user.email }, null, 2);
 
     currentGroup = await loadCurrentGroup();
     groupBox.textContent = currentGroup ? JSON.stringify(currentGroup, null, 2) : "No group found.";
 
     if (!currentGroup) {
       fightsBox.innerHTML = "No group found.";
+      updateStickyBar();
       return;
     }
 
@@ -624,6 +725,7 @@ async function loadAppData() {
 
     if (!currentEvent) {
       fightsBox.innerHTML = "No fights found.";
+      updateStickyBar();
       return;
     }
 
@@ -656,140 +758,234 @@ async function loadAppData() {
     }
 
     currentOwnPicks = picksResult.data || [];
+    pickDrafts = {};
+    saveStateByFight = {};
 
-    const picksMap = {};
     currentOwnPicks.forEach((pick) => {
-      picksMap[pick.fight_id] = pick;
+      pickDrafts[pick.fight_id] = {
+        picked_winner: pick.picked_winner || "",
+        method: pick.method || "",
+        round_number: pick.round_number ? String(pick.round_number) : "",
+        decision_type: pick.decision_type || ""
+      };
+      saveStateByFight[pick.fight_id] = "Saved";
     });
 
-    fightsBox.innerHTML = currentFights.map((fight) => renderPickForm(fight, picksMap[fight.id])).join("");
+    isSubmittedForCurrentEvent = await hasSubmittedCurrentEvent();
 
-    attachFightFormEvents();
+    renderEventScreen();
     await loadSubmissionState();
     await loadSubmittedPicks();
+    await loadLeaderboard();
+    updateSubmitButtonState();
     setStatus(dataStatus, "App data loaded.");
+    switchView("event");
   } catch (err) {
     console.error(err);
     setStatus(dataStatus, "Unexpected error: " + err.message);
   }
 }
 
-saveConfigBtn.addEventListener("click", () => {
-  const url = urlInput.value.trim();
-  const key = keyInput.value.trim();
-
-  if (!url || !key) {
-    setStatus(configStatus, "Fill in both Project URL and Publishable Key.");
-    return;
-  }
-
-  const ok1 = setStoredItem("supabase_url", url);
-  const ok2 = setStoredItem("supabase_key", key);
-
-  if (!ok1 || !ok2) {
-    setStatus(configStatus, "Could not save locally in the browser.");
-    return;
-  }
-
-  initSupabase();
-});
-
-signUpBtn.addEventListener("click", async () => {
+function initSupabase() {
   try {
-    if (!supabaseClient) {
-      setStatus(authStatus, "Save your Supabase connection first.");
+    const savedUrl = getStoredItem("supabase_url");
+    const savedKey = getStoredItem("supabase_key");
+
+    if (savedUrl && urlInput) urlInput.value = savedUrl;
+    if (savedKey && keyInput) keyInput.value = savedKey;
+
+    if (!savedUrl || !savedKey) {
+      setStatus(configStatus, "Paste your Supabase Project URL and Publishable Key.");
       return;
     }
 
-    const email = emailInput.value.trim();
-    const password = passwordInput.value.trim();
+    if (!window.supabase) {
+      setStatus(configStatus, "Supabase library failed to load.");
+      return;
+    }
 
-    const { error } = await supabaseClient.auth.signUp({ email, password });
+    const { createClient } = window.supabase;
+    supabaseClient = createClient(savedUrl, savedKey);
+    setStatus(configStatus, "Supabase connection saved.");
+    refreshSession();
+  } catch (err) {
+    console.error(err);
+    setStatus(configStatus, "Initialization error: " + err.message);
+  }
+}
+
+async function refreshSession() {
+  try {
+    if (!supabaseClient) {
+      if (sessionBox) sessionBox.textContent = "No active session.";
+      currentSession = null;
+      return null;
+    }
+
+    const { data, error } = await supabaseClient.auth.getSession();
 
     if (error) {
       console.error(error);
-      setStatus(authStatus, "Signup error: " + error.message);
-      return;
+      setStatus(authStatus, "Could not read session: " + error.message);
+      if (sessionBox) sessionBox.textContent = "No active session.";
+      currentSession = null;
+      return null;
     }
 
-    setStatus(authStatus, "Account created.");
-    await refreshSession();
+    if (!data.session) {
+      if (sessionBox) sessionBox.textContent = "No active session.";
+      setStatus(authStatus, "Not signed in.");
+      currentSession = null;
+      return null;
+    }
+
+    currentSession = data.session;
+    if (sessionBox) {
+      sessionBox.textContent = JSON.stringify({ user_id: data.session.user.id, email: data.session.user.email }, null, 2);
+    }
+
+    setStatus(authStatus, "Signed in as " + data.session.user.email);
+    return data.session;
   } catch (err) {
     console.error(err);
-    setStatus(authStatus, "Signup exception: " + err.message);
+    setStatus(authStatus, "Session error: " + err.message);
+    return null;
   }
-});
+}
 
-signInBtn.addEventListener("click", async () => {
-  try {
-    if (!supabaseClient) {
-      setStatus(authStatus, "Save your Supabase connection first.");
+if (saveConfigBtn) {
+  saveConfigBtn.addEventListener("click", () => {
+    const url = urlInput.value.trim();
+    const key = keyInput.value.trim();
+
+    if (!url || !key) {
+      setStatus(configStatus, "Fill in both Project URL and Publishable Key.");
       return;
     }
 
-    const email = emailInput.value.trim();
-    const password = passwordInput.value.trim();
+    const ok1 = setStoredItem("supabase_url", url);
+    const ok2 = setStoredItem("supabase_key", key);
 
-    const result = await supabaseClient.auth.signInWithPassword({ email, password });
-
-    if (result.error) {
-      console.error(result.error);
-      setStatus(authStatus, "Login error: " + result.error.message);
+    if (!ok1 || !ok2) {
+      setStatus(configStatus, "Could not save locally in the browser.");
       return;
     }
 
-    setStatus(authStatus, "Login successful.");
-    await refreshSession();
-  } catch (err) {
-    console.error(err);
-    setStatus(authStatus, "Login exception: " + err.message);
-  }
-});
+    initSupabase();
+  });
+}
 
-signOutBtn.addEventListener("click", async () => {
-  try {
-    if (!supabaseClient) {
-      setStatus(authStatus, "No active Supabase client.");
-      return;
+if (signUpBtn) {
+  signUpBtn.addEventListener("click", async () => {
+    try {
+      if (!supabaseClient) {
+        setStatus(authStatus, "Save your Supabase connection first.");
+        return;
+      }
+
+      const email = emailInput.value.trim();
+      const password = passwordInput.value.trim();
+      const { error } = await supabaseClient.auth.signUp({ email, password });
+
+      if (error) {
+        console.error(error);
+        setStatus(authStatus, "Signup error: " + error.message);
+        return;
+      }
+
+      setStatus(authStatus, "Account created.");
+      await refreshSession();
+    } catch (err) {
+      console.error(err);
+      setStatus(authStatus, "Signup exception: " + err.message);
     }
+  });
+}
 
-    const { error } = await supabaseClient.auth.signOut();
+if (signInBtn) {
+  signInBtn.addEventListener("click", async () => {
+    try {
+      if (!supabaseClient) {
+        setStatus(authStatus, "Save your Supabase connection first.");
+        return;
+      }
 
-    if (error) {
-      console.error(error);
-      setStatus(authStatus, "Logout error: " + error.message);
-      return;
+      const email = emailInput.value.trim();
+      const password = passwordInput.value.trim();
+      const result = await supabaseClient.auth.signInWithPassword({ email, password });
+
+      if (result.error) {
+        console.error(result.error);
+        setStatus(authStatus, "Login error: " + result.error.message);
+        return;
+      }
+
+      setStatus(authStatus, "Login successful.");
+      await refreshSession();
+      await loadAppData();
+    } catch (err) {
+      console.error(err);
+      setStatus(authStatus, "Login exception: " + err.message);
     }
+  });
+}
 
-    currentSession = null;
-    currentGroup = null;
-    currentEvent = null;
-    currentFights = [];
-    currentOwnPicks = [];
-    currentRevealOpen = false;
-    currentProfiles = [];
+if (signOutBtn) {
+  signOutBtn.addEventListener("click", async () => {
+    try {
+      if (!supabaseClient) {
+        setStatus(authStatus, "No active Supabase client.");
+        return;
+      }
 
-    sessionBox.textContent = "No active session.";
-    userBox.textContent = "No data yet.";
-    groupBox.textContent = "No data yet.";
-    eventBox.textContent = "No data yet.";
-    fightsBox.innerHTML = "No data yet.";
-    othersPicksBox.innerHTML = "Nothing to show yet.";
-    othersStatus.textContent = "Hidden until everyone has submitted.";
+      const { error } = await supabaseClient.auth.signOut();
+      if (error) {
+        console.error(error);
+        setStatus(authStatus, "Logout error: " + error.message);
+        return;
+      }
 
-    setStatus(authStatus, "Logged out.");
-    setStatus(passwordStatus, "");
-    setStatus(dataStatus, "");
-    setStatus(submissionStatus, "");
-    setStatus(revealStatus, "");
-  } catch (err) {
-    console.error(err);
-    setStatus(authStatus, "Logout exception: " + err.message);
-  }
-});
+      currentSession = null;
+      currentGroup = null;
+      currentEvent = null;
+      currentFights = [];
+      currentOwnPicks = [];
+      currentRevealOpen = false;
+      currentProfiles = [];
+      currentLeaderboard = [];
+      pickDrafts = {};
+      saveTimers = {};
+      saveStateByFight = {};
+      isSubmittedForCurrentEvent = false;
 
-loadDataBtn.addEventListener("click", loadAppData);
-submitAllBtn.addEventListener("click", submitAllPicks);
-changePasswordBtn.addEventListener("click", changePassword);
+      if (sessionBox) sessionBox.textContent = "No active session.";
+      if (userBox) userBox.textContent = "No data yet.";
+      if (groupBox) groupBox.textContent = "No data yet.";
+      if (eventBox) eventBox.textContent = "No data yet.";
+      if (fightsBox) fightsBox.innerHTML = "No data yet.";
+      if (othersPicksBox) othersPicksBox.innerHTML = "Nothing to show yet.";
+      if (othersStatus) othersStatus.textContent = "Hidden until everyone has submitted.";
+      if (leaderboardBox) leaderboardBox.innerHTML = "No data yet.";
 
+      setStatus(authStatus, "Logged out.");
+      setStatus(passwordStatus, "");
+      setStatus(dataStatus, "");
+      setStatus(submissionStatus, "");
+      setStatus(revealStatus, "");
+      updateStickyBar();
+      switchView("profile");
+    } catch (err) {
+      console.error(err);
+      setStatus(authStatus, "Logout exception: " + err.message);
+    }
+  });
+}
+
+if (loadDataBtn) loadDataBtn.addEventListener("click", loadAppData);
+if (submitAllBtn) submitAllBtn.addEventListener("click", submitAllPicks);
+if (stickySubmitBtn) stickySubmitBtn.addEventListener("click", submitAllPicks);
+if (changePasswordBtn) changePasswordBtn.addEventListener("click", changePassword);
+
+initTabs();
 initSupabase();
+switchView("event");
