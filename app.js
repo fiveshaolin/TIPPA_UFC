@@ -952,6 +952,9 @@ if (submitAllBtn) submitAllBtn.addEventListener("click", submitAllPicks);
 if (stickySubmitBtn) stickySubmitBtn.addEventListener("click", submitAllPicks);
 if (changePasswordBtn) changePasswordBtn.addEventListener("click", changePassword);
 
-initTabs();
 initSupabase();
-switchView("event");
+
+document.addEventListener("DOMContentLoaded", () => {
+  initTabs();
+  switchView("event");
+});
