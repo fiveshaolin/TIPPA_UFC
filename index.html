@@ -1,106 +1,321 @@
 <!DOCTYPE html>
-<html lang="sv">
+<html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TIPPA UFC</title>
-  <link rel="stylesheet" href="./style.css" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>UFC Picks App</title>
+  <style>
+    :root {
+      --bg: #f3f4f6;
+      --card: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --border: #d1d5db;
+      --primary: #0f766e;
+      --primary-hover: #115e59;
+      --blue: #2563eb;
+      --blue-hover: #1d4ed8;
+      --red: #dc2626;
+      --red-hover: #b91c1c;
+      --green: #15803d;
+      --green-hover: #166534;
+      --shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+      --radius: 16px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .container {
+      width: min(1100px, calc(100% - 32px));
+      margin: 24px auto 48px;
+    }
+
+    h1, h2, h3 {
+      margin: 0 0 12px;
+    }
+
+    p {
+      margin: 8px 0;
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .stack {
+      display: grid;
+      gap: 14px;
+    }
+
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    input,
+    select,
+    button,
+    textarea {
+      font: inherit;
+    }
+
+    input,
+    select {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fff;
+    }
+
+    button {
+      border: none;
+      border-radius: 12px;
+      padding: 12px 18px;
+      color: white;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    button:hover {
+      opacity: 0.98;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-hover);
+    }
+
+    .btn-blue {
+      background: var(--blue);
+    }
+
+    .btn-blue:hover {
+      background: var(--blue-hover);
+    }
+
+    .btn-red {
+      background: var(--red);
+    }
+
+    .btn-red:hover {
+      background: var(--red-hover);
+    }
+
+    .btn-green {
+      background: var(--green);
+    }
+
+    .btn-green:hover {
+      background: var(--green-hover);
+    }
+
+    .status {
+      min-height: 24px;
+      color: var(--muted);
+    }
+
+    pre {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 14px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin: 0;
+    }
+
+    .fight-item {
+      border: 1px solid #e5e7eb;
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 16px;
+      background: #fcfcfd;
+    }
+
+    .fight-title {
+      margin-bottom: 12px;
+      font-size: 1rem;
+    }
+
+    .fight-item label {
+      margin-top: 10px;
+    }
+
+    .fight-item button {
+      margin-top: 14px;
+    }
+
+    .section-divider {
+      border: none;
+      border-top: 1px solid #e5e7eb;
+      margin: 24px 0;
+    }
+
+    ul {
+      margin: 10px 0 0 20px;
+      padding: 0;
+    }
+
+    li {
+      margin-bottom: 8px;
+    }
+
+    @media (max-width: 640px) {
+      .container {
+        width: min(100% - 20px, 1100px);
+        margin-top: 16px;
+      }
+
+      .card {
+        padding: 18px;
+      }
+
+      button {
+        width: 100%;
+      }
+
+      .row {
+        flex-direction: column;
+        align-items: stretch;
+      }
+    }
+  </style>
 </head>
 <body>
-  <main class="app">
-    <h1>TIPPA UFC</h1>
-    <p class="sub">Inloggningstest mot Supabase v6</p>
+  <div class="container">
+    <div class="card">
+      <h1>UFC Picks App</h1>
+      <p class="muted">Save your Supabase connection details in the browser, then sign in and submit your picks.</p>
+    </div>
 
-    <section class="card">
-      <h2>Supabase</h2>
+    <div class="card">
+      <h2>Supabase connection</h2>
+      <div class="stack">
+        <div>
+          <label for="supabase-url">Project URL</label>
+          <input id="supabase-url" type="text" placeholder="https://your-project.supabase.co" />
+        </div>
 
-      <label>
-        Project URL
-        <input id="supabase-url" type="text" placeholder="https://your-project.supabase.co" />
-      </label>
+        <div>
+          <label for="supabase-key">Publishable Key</label>
+          <input id="supabase-key" type="text" placeholder="Paste your publishable key" />
+        </div>
 
-      <label>
-        Publishable key
-        <input id="supabase-key" type="text" placeholder="Paste your publishable/anon key" />
-      </label>
+        <div class="row">
+          <button id="save-config" class="btn-primary" type="button">Save connection</button>
+        </div>
 
-      <button id="save-config">Spara anslutning</button>
-      <p id="config-status" class="status"></p>
-    </section>
+        <p id="config-status" class="status"></p>
+      </div>
+    </div>
 
-    <section class="card">
-      <h2>Skapa konto / logga in</h2>
+    <div class="card">
+      <h2>Create account / log in</h2>
 
-      <label>
-        E-post
-        <input id="email" type="email" placeholder="you@example.com" />
-      </label>
+      <div class="stack">
+        <div>
+          <label for="email">Email</label>
+          <input id="email" type="email" placeholder="name@example.com" />
+        </div>
 
-      <label>
-        Lösenord
-        <input id="password" type="password" placeholder="Minst 6 tecken" />
-      </label>
+        <div>
+          <label for="password">Password</label>
+          <input id="password" type="password" placeholder="Your password" />
+        </div>
 
-      <div class="actions">
-        <button id="sign-up">Skapa konto</button>
-        <button id="sign-in" class="secondary">Logga in</button>
-        <button id="sign-out" class="danger">Logga ut</button>
+        <div class="row">
+          <button id="sign-up" class="btn-primary" type="button">Create account</button>
+          <button id="sign-in" class="btn-blue" type="button">Log in</button>
+          <button id="sign-out" class="btn-red" type="button">Log out</button>
+        </div>
+
+        <p id="auth-status" class="status"></p>
       </div>
 
-      <p id="auth-status" class="status"></p>
+      <hr class="section-divider" />
 
-      <hr />
+      <h3>Change password</h3>
+      <div class="stack">
+        <div>
+          <label for="new-password">New password</label>
+          <input id="new-password" type="password" placeholder="Enter new password" />
+        </div>
 
-      <h3>Byt lösenord</h3>
+        <div class="row">
+          <button id="change-password" class="btn-blue" type="button">Change password</button>
+        </div>
 
-      <label>
-        Nytt lösenord
-        <input id="new-password" type="password" placeholder="Nytt lösenord" />
-      </label>
-
-      <div class="actions">
-        <button id="change-password" class="secondary">Byt lösenord</button>
+        <p id="password-status" class="status"></p>
       </div>
+    </div>
 
-      <p id="password-status" class="status"></p>
-    </section>
-
-    <section class="card">
+    <div class="card">
       <h2>Session</h2>
-      <pre id="session-box">Ingen aktiv session.</pre>
-    </section>
+      <pre id="session-box">No active session.</pre>
+    </div>
 
-    <section class="card">
-      <h2>Min vy</h2>
+    <div class="card">
+      <h2>My view</h2>
 
-      <div class="actions">
-        <button id="load-data">Ladda appdata</button>
-        <button id="submit-all" class="secondary">Skicka in alla picks</button>
+      <div class="row" style="margin-bottom: 12px;">
+        <button id="load-data" class="btn-primary" type="button">Load app data</button>
+        <button id="submit-all" class="btn-green" type="button">Submit all picks</button>
       </div>
 
       <p id="data-status" class="status"></p>
       <p id="submission-status" class="status"></p>
       <p id="reveal-status" class="status"></p>
 
-      <h3>Användare</h3>
-      <pre id="user-box">Ingen data ännu.</pre>
+      <h3>User</h3>
+      <pre id="user-box">No data yet.</pre>
 
-      <h3>Grupp</h3>
-      <pre id="group-box">Ingen data ännu.</pre>
+      <h3 style="margin-top: 20px;">Group</h3>
+      <pre id="group-box">No data yet.</pre>
 
-      <h3>Event</h3>
-      <pre id="event-box">Ingen data ännu.</pre>
+      <h3 style="margin-top: 20px;">Event</h3>
+      <pre id="event-box">No data yet.</pre>
 
-      <h3>Main card</h3>
-      <div id="fights-box">Ingen data ännu.</div>
-    </section>
+      <h3 style="margin-top: 20px;">Main card</h3>
+      <div id="fights-box">No data yet.</div>
+    </div>
 
-    <section class="card">
-      <h2>Andras picks</h2>
-      <p id="others-status" class="status">Dolda tills alla skickat in.</p>
-      <div id="others-picks-box">Inget att visa ännu.</div>
-    </section>
-  </main>
+    <div class="card">
+      <h2>Submitted picks</h2>
+      <p id="others-status" class="status">Hidden until everyone has submitted.</p>
+      <div id="others-picks-box">Nothing to show yet.</div>
+    </div>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="./app.js"></script>
