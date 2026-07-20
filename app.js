@@ -1,3 +1,6 @@
+const SUPABASE_URL = "https://ibputfpjuvcsjkveqkdp.supabase.co";
+const SUPABASE_KEY = "sb_publishable_mKByW0FnQ0_0nc9NeDHGqA_N5mv7Ulu";
+
 let supabaseClient = null;
 let currentSession = null;
 let currentGroup = null;
@@ -13,11 +16,6 @@ let saveTimers = {};
 let saveStateByFight = {};
 let isSubmittedForCurrentEvent = false;
 let currentView = "event";
-
-const urlInput = document.getElementById("supabase-url");
-const keyInput = document.getElementById("supabase-key");
-const saveConfigBtn = document.getElementById("save-config");
-const configStatus = document.getElementById("config-status");
 
 const emailInput = document.getElementById("email");
 const passwordInput = document.getElementById("password");
@@ -61,29 +59,14 @@ function setStatus(el, message) {
   if (message) console.log(message);
 }
 
-function getStoredItem(key) {
-  try {
-    return localStorage.getItem(key);
-  } catch (e) {
-    console.error(e);
-    return null;
-  }
-}
-
-function setStoredItem(key, value) {
-  try {
-    localStorage.setItem(key, value);
-    return true;
-  } catch (e) {
-    console.error(e);
-    return false;
-  }
-}
-
 function getDisplayName(userId) {
   const profile = currentProfiles.find((p) => p.id === userId);
-  if (profile && profile.display_name && profile.display_name.trim()) return profile.display_name.trim();
-  if (currentSession && currentSession.user && currentSession.user.id === userId) return currentSession.user.email;
+  if (profile && profile.display_name && profile.display_name.trim()) {
+    return profile.display_name.trim();
+  }
+  if (currentSession && currentSession.user && currentSession.user.id === userId) {
+    return currentSession.user.email;
+  }
   return userId;
 }
 
@@ -108,10 +91,10 @@ function initTabs() {
 }
 
 function getDraftFromInputs(fightId) {
-  const winnerEl = document.querySelector('[data-fight-id="' + fightId + '"][data-field="picked_winner"]');
-  const methodEl = document.querySelector('[data-fight-id="' + fightId + '"][data-field="method"]');
-  const roundEl = document.querySelector('[data-fight-id="' + fightId + '"][data-field="round_number"]');
-  const decisionEl = document.querySelector('[data-fight-id="' + fightId + '"][data-field="decision_type"]');
+  const winnerEl = document.querySelector(`[data-fight-id="${fightId}"][data-field="picked_winner"]`);
+  const methodEl = document.querySelector(`[data-fight-id="${fightId}"][data-field="method"]`);
+  const roundEl = document.querySelector(`[data-fight-id="${fightId}"][data-field="round_number"]`);
+  const decisionEl = document.querySelector(`[data-fight-id="${fightId}"][data-field="decision_type"]`);
   const method = methodEl ? methodEl.value : "";
 
   return {
@@ -178,7 +161,9 @@ function renderPickForm(fight, existingPick) {
 
   return `
     <article class="fight-item card">
-      <div class="fight-title"><strong>Fight ${fight.bout_order}:</strong> ${fight.fighter_a} vs ${fight.fighter_b}</div>
+      <div class="fight-title">
+        <strong>Fight ${fight.bout_order}:</strong> ${fight.fighter_a} vs ${fight.fighter_b}
+      </div>
 
       <label>
         Winner
@@ -255,12 +240,13 @@ function attachFightFormEvents() {
       const field = event.target.dataset.field;
       if (!fightId || !field || isSubmittedForCurrentEvent) return;
 
-      const methodEl = document.querySelector('[data-fight-id="' + fightId + '"][data-field="method"]');
+      const methodEl = document.querySelector(`[data-fight-id="${fightId}"][data-field="method"]`);
       const method = methodEl ? methodEl.value : "";
-      const roundWrapper = document.querySelector('.round-wrapper[data-fight-id="' + fightId + '"]');
-      const decisionWrapper = document.querySelector('.decision-wrapper[data-fight-id="' + fightId + '"]');
-      const roundEl = document.querySelector('[data-fight-id="' + fightId + '"][data-field="round_number"]');
-      const decisionEl = document.querySelector('[data-fight-id="' + fightId + '"][data-field="decision_type"]');
+
+      const roundWrapper = document.querySelector(`.round-wrapper[data-fight-id="${fightId}"]`);
+      const decisionWrapper = document.querySelector(`.decision-wrapper[data-fight-id="${fightId}"]`);
+      const roundEl = document.querySelector(`[data-fight-id="${fightId}"][data-field="round_number"]`);
+      const decisionEl = document.querySelector(`[data-fight-id="${fightId}"][data-field="decision_type"]`);
 
       if (method === "ko_tko" || method === "sub") {
         if (roundWrapper) roundWrapper.style.display = "block";
@@ -288,15 +274,12 @@ function queueAutosave(fightId) {
   if (saveTimers[fightId]) clearTimeout(saveTimers[fightId]);
 
   saveStateByFight[fightId] = isFightDraftComplete(pickDrafts[fightId]) ? "Saving..." : "Incomplete pick";
-  const statusEl = document.getElementById("pick-status-" + fightId);
+  const statusEl = document.getElementById(`pick-status-${fightId}`);
   if (statusEl) statusEl.textContent = saveStateByFight[fightId];
   updateSubmitButtonState();
 
   if (!isFightDraftComplete(pickDrafts[fightId])) return;
-
-  saveTimers[fightId] = setTimeout(() => {
-    autosavePick(fightId);
-  }, 400);
+  saveTimers[fightId] = setTimeout(() => autosavePick(fightId), 400);
 }
 
 async function hasSubmittedCurrentEvent() {
@@ -320,7 +303,7 @@ async function autosavePick(fightId) {
     if (!supabaseClient || !currentSession || !currentGroup || !currentEvent || isSubmittedForCurrentEvent) return;
 
     const draft = pickDrafts[fightId];
-    const statusEl = document.getElementById("pick-status-" + fightId);
+    const statusEl = document.getElementById(`pick-status-${fightId}`);
 
     if (!isFightDraftComplete(draft)) {
       saveStateByFight[fightId] = "Incomplete pick";
@@ -350,7 +333,7 @@ async function autosavePick(fightId) {
 
     if (error) {
       console.error(error);
-      saveStateByFight[fightId] = "Error saving: " + error.message;
+      saveStateByFight[fightId] = `Error saving: ${error.message}`;
       if (statusEl) statusEl.textContent = saveStateByFight[fightId];
       updateSubmitButtonState();
       return;
@@ -369,8 +352,8 @@ async function autosavePick(fightId) {
     updateSubmitButtonState();
   } catch (err) {
     console.error(err);
-    saveStateByFight[fightId] = "Error saving: " + err.message;
-    const statusEl = document.getElementById("pick-status-" + fightId);
+    saveStateByFight[fightId] = `Error saving: ${err.message}`;
+    const statusEl = document.getElementById(`pick-status-${fightId}`);
     if (statusEl) statusEl.textContent = saveStateByFight[fightId];
     updateSubmitButtonState();
   }
@@ -384,7 +367,7 @@ async function loadSubmissionState() {
 
   if (memberError) {
     console.error(memberError);
-    setStatus(submissionStatus, "Error loading members: " + memberError.message);
+    setStatus(submissionStatus, `Error loading members: ${memberError.message}`);
     return;
   }
 
@@ -396,7 +379,7 @@ async function loadSubmissionState() {
 
   if (submissionsError) {
     console.error(submissionsError);
-    setStatus(submissionStatus, "Error loading submissions: " + submissionsError.message);
+    setStatus(submissionStatus, `Error loading submissions: ${submissionsError.message}`);
     return;
   }
 
@@ -404,27 +387,27 @@ async function loadSubmissionState() {
   const ownSubmitted = submissions.some((row) => row.user_id === currentSession.user.id);
 
   isSubmittedForCurrentEvent = ownSubmitted;
-
   setStatus(
     submissionStatus,
-    submittedCount + " of " + (memberCount || 0) + " have submitted. You are " + (ownSubmitted ? "done" : "not done") + "."
+    `${submittedCount} of ${memberCount || 0} have submitted. You are ${ownSubmitted ? "done" : "not done"}.`
   );
 
-  currentRevealOpen = (memberCount || 0) > 0 && submittedCount === memberCount;
-
+  currentRevealOpen = memberCount > 0 && submittedCount >= memberCount;
   setStatus(
     revealStatus,
-    currentRevealOpen ? "Everyone has submitted. Picks are now visible." : "Picks stay hidden until everyone has submitted."
+    currentRevealOpen
+      ? "Everyone has submitted. Picks are now visible."
+      : "Picks stay hidden until everyone has submitted."
   );
 
   updateSubmitButtonState();
 }
 
 function describePick(pick) {
-  if (pick.method === "decision") return "Decision (" + pick.decision_type + ")";
-  if (pick.method === "ko_tko") return "KO/TKO round " + pick.round_number;
-  if (pick.method === "sub") return "Submission round " + pick.round_number;
-  return pick.method || "";
+  if (pick.method === "decision") return `Decision (${pick.decision_type})`;
+  if (pick.method === "ko_tko") return `KO/TKO round ${pick.round_number}`;
+  if (pick.method === "sub") return `Submission round ${pick.round_number}`;
+  return pick.method;
 }
 
 async function loadSubmittedPicks() {
@@ -443,18 +426,17 @@ async function loadSubmittedPicks() {
 
   if (error) {
     console.error(error);
-    othersStatus.textContent = "Error loading submitted picks: " + error.message;
+    othersStatus.textContent = `Error loading submitted picks: ${error.message}`;
     return;
   }
 
   const grouped = {};
-  (data || []).forEach((pick) => {
+  data.forEach((pick) => {
     if (!grouped[pick.user_id]) grouped[pick.user_id] = [];
     grouped[pick.user_id].push(pick);
   });
 
   const userIds = Object.keys(grouped);
-
   if (!userIds.length) {
     othersStatus.textContent = "No picks found.";
     othersPicksBox.innerHTML = "Nothing to show yet.";
@@ -462,15 +444,20 @@ async function loadSubmittedPicks() {
   }
 
   let html = "";
-
   userIds.forEach((userId) => {
     let picksHtml = "";
     grouped[userId].forEach((pick) => {
       const fight = currentFights.find((f) => f.id === pick.fight_id);
-      const fightLabel = fight ? fight.fighter_a + " vs " + fight.fighter_b : pick.fight_id;
-      picksHtml += "<li>" + fightLabel + ": " + pick.picked_winner + " via " + describePick(pick) + "</li>";
+      const fightLabel = fight ? `${fight.fighter_a} vs ${fight.fighter_b}` : pick.fight_id;
+      picksHtml += `<li>${fightLabel}: <strong>${pick.picked_winner}</strong> via ${describePick(pick)}</li>`;
     });
-    html += '<section class="card submitted-picks-card"><strong>' + getDisplayName(userId) + '</strong><ul>' + picksHtml + '</ul></section>';
+
+    html += `
+      <section class="card submitted-picks-card">
+        <strong>${getDisplayName(userId)}</strong>
+        <ul>${picksHtml}</ul>
+      </section>
+    `;
   });
 
   othersStatus.textContent = "All submitted picks are now visible.";
@@ -491,14 +478,14 @@ function renderLeaderboard() {
       const total = row.total_points ?? 0;
       const previous = row.previous_total ?? 0;
       const lastEvent = row.last_event_points ?? 0;
-      const breakdown = Array.isArray(row.breakdown) ? row.breakdown.join(" + ") : "";
+      const breakdown = Array.isArray(row.breakdown) ? row.breakdown.join(", ") : "";
 
       return `
         <details class="card leaderboard-card">
           <summary>
             <div>
-              <div class="leaderboard-rank">#${index + 1} ${name}</div>
-              <div class="leaderboard-subline">Previous ${previous} · Last event ${lastEvent}</div>
+              <div class="leaderboard-rank">${index + 1}. ${name}</div>
+              <div class="leaderboard-subline">Previous: ${previous} · Last event: ${lastEvent}</div>
             </div>
             <div class="leaderboard-total">${total}</div>
           </summary>
@@ -568,7 +555,7 @@ async function submitAllPicks() {
 
     if (error) {
       console.error(error);
-      setStatus(dataStatus, "Error submitting picks: " + error.message);
+      setStatus(dataStatus, `Error submitting picks: ${error.message}`);
       return;
     }
 
@@ -583,14 +570,14 @@ async function submitAllPicks() {
     await loadSubmittedPicks();
   } catch (err) {
     console.error(err);
-    setStatus(dataStatus, "Unexpected submit error: " + err.message);
+    setStatus(dataStatus, `Unexpected submit error: ${err.message}`);
   }
 }
 
 async function changePassword() {
   try {
     if (!supabaseClient) {
-      setStatus(passwordStatus, "Save your Supabase connection first.");
+      setStatus(passwordStatus, "Supabase is not initialized.");
       return;
     }
 
@@ -609,7 +596,7 @@ async function changePassword() {
     const { error } = await supabaseClient.auth.updateUser({ password: newPassword });
     if (error) {
       console.error(error);
-      setStatus(passwordStatus, "Error changing password: " + error.message);
+      setStatus(passwordStatus, `Error changing password: ${error.message}`);
       return;
     }
 
@@ -617,7 +604,7 @@ async function changePassword() {
     newPasswordInput.value = "";
   } catch (err) {
     console.error(err);
-    setStatus(passwordStatus, "Unexpected error: " + err.message);
+    setStatus(passwordStatus, `Unexpected error: ${err.message}`);
   }
 }
 
@@ -631,7 +618,7 @@ async function loadCurrentGroup() {
 
   if (membershipResult.error) {
     console.error(membershipResult.error);
-    setStatus(dataStatus, "Error loading group membership: " + membershipResult.error.message);
+    setStatus(dataStatus, `Error loading group membership: ${membershipResult.error.message}`);
     return null;
   }
 
@@ -643,7 +630,7 @@ async function loadCurrentGroup() {
 
   if (groupResult.error) {
     console.error(groupResult.error);
-    setStatus(dataStatus, "Error loading group: " + groupResult.error.message);
+    setStatus(dataStatus, `Error loading group: ${groupResult.error.message}`);
     return null;
   }
 
@@ -662,7 +649,7 @@ async function loadProfilesForCurrentGroup() {
     return;
   }
 
-  const memberIds = (memberIdsResult.data || []).map((row) => row.user_id);
+  const memberIds = memberIdsResult.data.map((row) => row.user_id);
   if (!memberIds.length) {
     currentProfiles = [];
     return;
@@ -685,7 +672,7 @@ async function loadProfilesForCurrentGroup() {
 async function loadAppData() {
   try {
     if (!supabaseClient) {
-      setStatus(dataStatus, "Save your Supabase connection first.");
+      setStatus(dataStatus, "Supabase is not initialized.");
       return;
     }
 
@@ -695,7 +682,11 @@ async function loadAppData() {
       return;
     }
 
-    userBox.textContent = JSON.stringify({ id: session.user.id, email: session.user.email }, null, 2);
+    userBox.textContent = JSON.stringify(
+      { id: session.user.id, email: session.user.email },
+      null,
+      2
+    );
 
     currentGroup = await loadCurrentGroup();
     groupBox.textContent = currentGroup ? JSON.stringify(currentGroup, null, 2) : "No group found.";
@@ -716,7 +707,7 @@ async function loadAppData() {
 
     if (eventsResult.error) {
       console.error(eventsResult.error);
-      setStatus(dataStatus, "Error loading event: " + eventsResult.error.message);
+      setStatus(dataStatus, `Error loading event: ${eventsResult.error.message}`);
       return;
     }
 
@@ -738,7 +729,7 @@ async function loadAppData() {
 
     if (fightsResult.error) {
       console.error(fightsResult.error);
-      setStatus(dataStatus, "Error loading fights: " + fightsResult.error.message);
+      setStatus(dataStatus, `Error loading fights: ${fightsResult.error.message}`);
       return;
     }
 
@@ -753,7 +744,7 @@ async function loadAppData() {
 
     if (picksResult.error) {
       console.error(picksResult.error);
-      setStatus(dataStatus, "Error loading picks: " + picksResult.error.message);
+      setStatus(dataStatus, `Error loading picks: ${picksResult.error.message}`);
       return;
     }
 
@@ -782,35 +773,24 @@ async function loadAppData() {
     switchView("event");
   } catch (err) {
     console.error(err);
-    setStatus(dataStatus, "Unexpected error: " + err.message);
+    setStatus(dataStatus, `Unexpected error: ${err.message}`);
   }
 }
 
 function initSupabase() {
   try {
-    const savedUrl = getStoredItem("supabase_url");
-    const savedKey = getStoredItem("supabase_key");
-
-    if (savedUrl && urlInput) urlInput.value = savedUrl;
-    if (savedKey && keyInput) keyInput.value = savedKey;
-
-    if (!savedUrl || !savedKey) {
-      setStatus(configStatus, "Paste your Supabase Project URL and Publishable Key.");
-      return;
-    }
-
     if (!window.supabase) {
-      setStatus(configStatus, "Supabase library failed to load.");
+      setStatus(authStatus, "Supabase library failed to load.");
       return;
     }
 
     const { createClient } = window.supabase;
-    supabaseClient = createClient(savedUrl, savedKey);
-    setStatus(configStatus, "Supabase connection saved.");
+    supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+    setStatus(authStatus, "Ready to sign in.");
     refreshSession();
   } catch (err) {
     console.error(err);
-    setStatus(configStatus, "Initialization error: " + err.message);
+    setStatus(authStatus, `Initialization error: ${err.message}`);
   }
 }
 
@@ -826,7 +806,7 @@ async function refreshSession() {
 
     if (error) {
       console.error(error);
-      setStatus(authStatus, "Could not read session: " + error.message);
+      setStatus(authStatus, `Could not read session: ${error.message}`);
       if (sessionBox) sessionBox.textContent = "No active session.";
       currentSession = null;
       return null;
@@ -840,56 +820,42 @@ async function refreshSession() {
     }
 
     currentSession = data.session;
+
     if (sessionBox) {
-      sessionBox.textContent = JSON.stringify({ user_id: data.session.user.id, email: data.session.user.email }, null, 2);
+      sessionBox.textContent = JSON.stringify(
+        {
+          user_id: data.session.user.id,
+          email: data.session.user.email
+        },
+        null,
+        2
+      );
     }
 
-    setStatus(authStatus, "Signed in as " + data.session.user.email);
+    setStatus(authStatus, `Signed in as ${data.session.user.email}`);
     return data.session;
   } catch (err) {
     console.error(err);
-    setStatus(authStatus, "Session error: " + err.message);
+    setStatus(authStatus, `Session error: ${err.message}`);
     return null;
   }
-}
-
-if (saveConfigBtn) {
-  saveConfigBtn.addEventListener("click", () => {
-    const url = urlInput.value.trim();
-    const key = keyInput.value.trim();
-
-    if (!url || !key) {
-      setStatus(configStatus, "Fill in both Project URL and Publishable Key.");
-      return;
-    }
-
-    const ok1 = setStoredItem("supabase_url", url);
-    const ok2 = setStoredItem("supabase_key", key);
-
-    if (!ok1 || !ok2) {
-      setStatus(configStatus, "Could not save locally in the browser.");
-      return;
-    }
-
-    initSupabase();
-  });
 }
 
 if (signUpBtn) {
   signUpBtn.addEventListener("click", async () => {
     try {
       if (!supabaseClient) {
-        setStatus(authStatus, "Save your Supabase connection first.");
+        setStatus(authStatus, "Supabase is not initialized.");
         return;
       }
 
       const email = emailInput.value.trim();
       const password = passwordInput.value.trim();
-      const { error } = await supabaseClient.auth.signUp({ email, password });
 
+      const { error } = await supabaseClient.auth.signUp({ email, password });
       if (error) {
         console.error(error);
-        setStatus(authStatus, "Signup error: " + error.message);
+        setStatus(authStatus, `Signup error: ${error.message}`);
         return;
       }
 
@@ -897,7 +863,7 @@ if (signUpBtn) {
       await refreshSession();
     } catch (err) {
       console.error(err);
-      setStatus(authStatus, "Signup exception: " + err.message);
+      setStatus(authStatus, `Signup exception: ${err.message}`);
     }
   });
 }
@@ -906,17 +872,17 @@ if (signInBtn) {
   signInBtn.addEventListener("click", async () => {
     try {
       if (!supabaseClient) {
-        setStatus(authStatus, "Save your Supabase connection first.");
+        setStatus(authStatus, "Supabase is not initialized.");
         return;
       }
 
       const email = emailInput.value.trim();
       const password = passwordInput.value.trim();
-      const result = await supabaseClient.auth.signInWithPassword({ email, password });
 
+      const result = await supabaseClient.auth.signInWithPassword({ email, password });
       if (result.error) {
         console.error(result.error);
-        setStatus(authStatus, "Login error: " + result.error.message);
+        setStatus(authStatus, `Login error: ${result.error.message}`);
         return;
       }
 
@@ -925,7 +891,7 @@ if (signInBtn) {
       await loadAppData();
     } catch (err) {
       console.error(err);
-      setStatus(authStatus, "Login exception: " + err.message);
+      setStatus(authStatus, `Login exception: ${err.message}`);
     }
   });
 }
@@ -941,7 +907,7 @@ if (signOutBtn) {
       const { error } = await supabaseClient.auth.signOut();
       if (error) {
         console.error(error);
-        setStatus(authStatus, "Logout error: " + error.message);
+        setStatus(authStatus, `Logout error: ${error.message}`);
         return;
       }
 
@@ -976,7 +942,7 @@ if (signOutBtn) {
       switchView("profile");
     } catch (err) {
       console.error(err);
-      setStatus(authStatus, "Logout exception: " + err.message);
+      setStatus(authStatus, `Logout exception: ${err.message}`);
     }
   });
 }
