@@ -474,22 +474,22 @@ function renderLeaderboard() {
 
   leaderboardBox.innerHTML = currentLeaderboard
     .map((row, index) => {
-      const name = getDisplayName(row.user_id);
-      const total = row.total_points ?? 0;
-      const previous = row.previous_total ?? 0;
+      const name = row.display_name || getDisplayName(row.user_id);
+      const rank = row.rank ?? index + 1;
+      const currentPoints = row.current_points ?? 0;
+      const beforeLast = row.points_before_last_event ?? 0;
       const lastEvent = row.last_event_points ?? 0;
-      const breakdown = Array.isArray(row.breakdown) ? row.breakdown.join(", ") : "";
 
       return `
         <details class="card leaderboard-card">
           <summary>
             <div>
-              <div class="leaderboard-rank">${index + 1}. ${name}</div>
-              <div class="leaderboard-subline">Previous: ${previous} · Last event: ${lastEvent}</div>
+              <div class="leaderboard-rank">${rank}. ${name}</div>
+              <div class="leaderboard-subline">Before last: ${beforeLast} · Last event: ${lastEvent}</div>
             </div>
-            <div class="leaderboard-total">${total}</div>
+            <div class="leaderboard-total">${currentPoints}</div>
           </summary>
-          <div class="leaderboard-breakdown">${breakdown || "No breakdown yet."}</div>
+          <div class="leaderboard-breakdown">Current total: ${currentPoints}</div>
         </details>
       `;
     })
@@ -501,7 +501,8 @@ async function loadLeaderboard() {
     .from("leaderboard")
     .select("*")
     .eq("group_id", currentGroup.id)
-    .order("total_points", { ascending: false });
+    .order("rank", { ascending: true })
+    .order("current_points", { ascending: false });
 
   if (scoresResult.error) {
     console.error(scoresResult.error);
@@ -568,6 +569,7 @@ async function submitAllPicks() {
     updateSubmitButtonState();
     await loadSubmissionState();
     await loadSubmittedPicks();
+    await loadLeaderboard();
   } catch (err) {
     console.error(err);
     setStatus(dataStatus, `Unexpected submit error: ${err.message}`);
