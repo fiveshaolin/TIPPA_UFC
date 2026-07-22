@@ -40,6 +40,9 @@ const groupBox = document.getElementById("group-box");
 const eventBox = document.getElementById("event-box");
 const fightsBox = document.getElementById("fights-box");
 
+// you can point this to a span/div in your event header
+const countdownBox = document.getElementById("countdown-box");
+
 const othersStatus = document.getElementById("others-status");
 const othersPicksBox = document.getElementById("others-picks-box");
 
@@ -53,6 +56,8 @@ const leaderboardBox = document.getElementById("leaderboard-box");
 const stickyBar = document.getElementById("sticky-submit-bar");
 const stickySaveState = document.getElementById("sticky-save-state");
 const stickySubmitBtn = document.getElementById("sticky-submit-btn");
+
+let countdownTimer = null;
 
 function setStatus(el, message) {
   if (el) el.textContent = message;
@@ -68,6 +73,63 @@ function getDisplayName(userId) {
     return currentSession.user.email;
   }
   return userId;
+}
+
+function formatEventLabel(event) {
+  if (!event) return "No event found.";
+
+  const name = event.name || "Unnamed event";
+  const eventDate = event.event_date ? new Date(event.event_date).toLocaleString() : "";
+  const lockTime = event.lock_time ? new Date(event.lock_time).toLocaleString() : "";
+
+  if (eventDate && lockTime) {
+    return `${name} — Event: ${eventDate} · Lock: ${lockTime}`;
+  }
+  if (eventDate) {
+    return `${name} — Event: ${eventDate}`;
+  }
+  return name;
+}
+
+function updateCountdown() {
+  if (!countdownBox) return;
+  if (!currentEvent || !currentEvent.lock_time) {
+    countdownBox.textContent = "";
+    return;
+  }
+
+  const now = Date.now();
+  const target = new Date(currentEvent.lock_time).getTime();
+  const diff = target - now;
+
+  if (diff <= 0) {
+    countdownBox.textContent = "Lock time reached — submissions closed.";
+    return;
+  }
+
+  const totalSeconds = Math.floor(diff / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const parts = [];
+  if (days) parts.push(`${days}d`);
+  parts.push(`${hours}h`);
+  parts.push(`${minutes}m`);
+  parts.push(`${seconds}s`);
+
+  countdownBox.textContent = `Time until lock: ${parts.join(" ")}`;
+}
+
+function startCountdownTimer() {
+  if (!countdownBox) return;
+  if (countdownTimer) {
+    clearInterval(countdownTimer);
+    countdownTimer = null;
+  }
+  updateCountdown();
+  countdownTimer = setInterval(updateCountdown, 1000);
 }
 
 function switchView(viewName) {
@@ -218,6 +280,7 @@ function renderEventScreen() {
 
   if (!currentEvent) {
     fightsBox.innerHTML = '<div class="card empty-state">No event found.</div>';
+    if (countdownBox) countdownBox.textContent = "";
     updateStickyBar();
     return;
   }
@@ -695,6 +758,7 @@ async function loadAppData() {
 
     if (!currentGroup) {
       fightsBox.innerHTML = "No group found.";
+      if (countdownBox) countdownBox.textContent = "";
       updateStickyBar();
       return;
     }
@@ -714,7 +778,8 @@ async function loadAppData() {
     }
 
     currentEvent = eventsResult.data && eventsResult.data.length ? eventsResult.data[0] : null;
-    eventBox.textContent = currentEvent ? JSON.stringify(currentEvent, null, 2) : "No event found.";
+    eventBox.textContent = formatEventLabel(currentEvent);
+    startCountdownTimer();
 
     if (!currentEvent) {
       fightsBox.innerHTML = "No fights found.";
@@ -934,6 +999,7 @@ if (signOutBtn) {
       if (othersPicksBox) othersPicksBox.innerHTML = "Nothing to show yet.";
       if (othersStatus) othersStatus.textContent = "Hidden until everyone has submitted.";
       if (leaderboardBox) leaderboardBox.innerHTML = "No data yet.";
+      if (countdownBox) countdownBox.textContent = "";
 
       setStatus(authStatus, "Logged out.");
       setStatus(passwordStatus, "");
