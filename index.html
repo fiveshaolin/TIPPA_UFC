@@ -355,6 +355,28 @@
       gap: var(--space-4);
     }
 
+    .event-meta {
+      display: grid;
+      gap: var(--space-2);
+      padding: var(--space-4);
+      border-radius: var(--radius-md);
+      background: color-mix(in oklab, var(--color-primary) 6%, var(--color-surface-2));
+      border: 1px solid color-mix(in oklab, var(--color-primary) 14%, var(--color-border));
+    }
+
+    .event-name {
+      font-size: var(--text-lg);
+      font-weight: 700;
+      color: var(--color-text);
+      line-height: 1.2;
+    }
+
+    .countdown-box {
+      font-size: var(--text-sm);
+      color: var(--color-primary);
+      font-weight: 700;
+    }
+
     .fight-item {
       display: grid;
       gap: var(--space-3);
@@ -571,6 +593,11 @@
           <div class="pill">Event</div>
           <h1>Make your picks</h1>
           <p class="muted">Your picks autosave as you go. Submit once when everything is ready.</p>
+
+          <div class="event-meta">
+            <div id="event-box" class="event-name">No event found.</div>
+            <div id="countdown-box" class="countdown-box"></div>
+          </div>
         </div>
 
         <div class="card stack">
@@ -681,11 +708,6 @@
           <div class="card stack">
             <h3>Group</h3>
             <pre id="group-box">No data yet.</pre>
-          </div>
-
-          <div class="card stack">
-            <h3>Event</h3>
-            <pre id="event-box">No data yet.</pre>
           </div>
         </div>
       </section>
