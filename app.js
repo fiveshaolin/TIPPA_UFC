@@ -649,20 +649,21 @@ function renderLeaderboard() {
     .map((row, index) => {
       const name = row.display_name || getDisplayName(row.user_id);
       const rank = row.rank ?? index + 1;
+      const openingPoints = row.opening_points ?? 0;
+      const appPoints = row.app_points ?? 0;
       const currentPoints = row.current_points ?? 0;
-      const beforeLast = row.points_before_last_event ?? 0;
-      const lastEvent = row.last_event_points ?? 0;
+      const seasonYear = row.season_year ?? "";
 
       return `
         <details class="card leaderboard-card">
           <summary>
             <div>
               <div class="leaderboard-rank">${rank}. ${name}</div>
-              <div class="leaderboard-subline">Before last: ${beforeLast} · Last event: ${lastEvent}</div>
+              <div class="leaderboard-subline">Opening: ${openingPoints} · App: ${appPoints}</div>
             </div>
             <div class="leaderboard-total">${currentPoints}</div>
           </summary>
-          <div class="leaderboard-breakdown">Current total: ${currentPoints}</div>
+          <div class="leaderboard-breakdown">Season ${seasonYear} · Current total: ${currentPoints}</div>
         </details>
       `;
     })
@@ -670,17 +671,31 @@ function renderLeaderboard() {
 }
 
 async function loadLeaderboard() {
-  const scoresResult = await supabaseClient
+  if (!supabaseClient || !currentGroup) {
+    currentLeaderboard = [];
+    renderLeaderboard();
+    return;
+  }
+
+  let query = supabaseClient
     .from("leaderboard")
-    .select("*")
+    .select("season_year, group_id, user_id, display_name, opening_points, app_points, current_points, rank")
     .eq("group_id", currentGroup.id)
-    .order("rank", { ascending: true })
-    .order("current_points", { ascending: false });
+    .order("rank", { ascending: true });
+
+  if (currentEvent && currentEvent.event_date) {
+    const seasonYear = new Date(currentEvent.event_date).getUTCFullYear();
+    if (!Number.isNaN(seasonYear)) {
+      query = query.eq("season_year", seasonYear);
+    }
+  }
+
+  const scoresResult = await query;
 
   if (scoresResult.error) {
     console.error(scoresResult.error);
     currentLeaderboard = [];
-    renderLeaderboard();
+    leaderboardBox.innerHTML = `<div class="card empty-state">Error loading leaderboard: ${scoresResult.error.message}</div>`;
     return;
   }
 
@@ -842,7 +857,16 @@ async function loadAppData() {
       currentEvent = null;
       currentFights = [];
       currentOwnPicks = [];
+      currentProfiles = [];
+      currentLeaderboard = [];
+      pickDrafts = {};
+      saveTimers = {};
+      saveStateByFight = {};
+      isSubmittedForCurrentEvent = false;
+      currentRevealOpen = false;
+      if (eventBox) eventBox.textContent = "No event found.";
       renderEventScreen();
+      renderLeaderboard();
       updateStickyBar();
       switchView("profile");
       return;
@@ -853,6 +877,8 @@ async function loadAppData() {
     if (!currentGroup) {
       if (fightsBox) fightsBox.innerHTML = "No group found.";
       if (countdownBox) countdownBox.textContent = "";
+      currentLeaderboard = [];
+      renderLeaderboard();
       updateStickyBar();
       return;
     }
@@ -876,6 +902,8 @@ async function loadAppData() {
 
     if (!currentEvent) {
       if (fightsBox) fightsBox.innerHTML = "No fights found.";
+      currentLeaderboard = [];
+      renderLeaderboard();
       updateStickyBar();
       return;
     }
@@ -908,6 +936,7 @@ async function loadAppData() {
 
     currentOwnPicks = picksResult.data || [];
     pickDrafts = {};
+    saveTimers = {};
     saveStateByFight = {};
 
     currentOwnPicks.forEach((pick) => {
