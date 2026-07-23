@@ -2,34 +2,32 @@
 <html lang="en" data-theme="light">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
     <title>UFC Picks App</title>
 
-    <!-- Fonts -->
     <link
       href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&f[]=teko@500,600&display=swap"
       rel="stylesheet"
     />
-
-    <!-- Styles -->
     <link rel="stylesheet" href="./style.css" />
 
-    <!-- Supabase -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.1/dist/umd/supabase.min.js" defer></script>
-
-    <!-- App JS -->
+    <script
+      src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.1/dist/umd/supabase.min.js"
+      defer
+    ></script>
     <script src="./app.js" defer></script>
   </head>
   <body>
     <div class="app-shell">
-      <!-- Top bar spacer -->
       <header class="topbar">
         <div class="topbar-spacer"></div>
       </header>
 
       <main>
         <section id="view-event" class="stack">
-          <!-- Event hero -->
           <article class="card hero-card">
             <div class="event-hero">
               <div class="section-title compact">
@@ -47,37 +45,14 @@
             </div>
           </article>
 
-          <!-- Status + controls -->
-          <article class="card">
-            <div class="section-title">
-              <h2>Status</h2>
-              <p class="muted">Current user, group and event state.</p>
-            </div>
-
-            <p id="auth-status" class="status">Not signed in.</p>
-            <p id="data-status" class="status"></p>
-            <p id="submission-status" class="status"></p>
-            <p id="reveal-status" class="status"></p>
-
-            <div class="actions single-action" data-signed-in-only hidden>
-              <button id="submit-all" class="btn btn-green" type="button">
-                Submit all picks for this event
-              </button>
-            </div>
-          </article>
-
-          <!-- Main card picks -->
           <article class="card fights-card">
             <div class="section-title">
               <h2>Main card</h2>
-              <p class="muted">
-                Each fight autosaves once the pick is complete.
-              </p>
+              <p class="muted">Each fight autosaves once the pick is complete.</p>
             </div>
             <div id="fights-box">No data yet.</div>
           </article>
 
-          <!-- Submitted picks (others) -->
           <article class="card submitted-picks-card">
             <div class="section-title">
               <h2>Submitted picks</h2>
@@ -103,29 +78,20 @@
         </section>
 
         <section id="view-profile" class="stack" hidden>
-          <!-- Account (signed-in view) -->
           <article class="card" id="account-card" data-signed-in-only hidden>
             <div class="section-title">
               <h2>Account</h2>
-              <p class="muted">
-                Manage your account once you are signed in.
-              </p>
             </div>
 
             <p id="signed-in-status" class="status"></p>
 
-            <div class="stack">
-              <p><strong>Email</strong><br /><span id="account-email"></span></p>
-
-              <div class="button-row single-action">
-                <button id="sign-out" class="btn btn-red" type="button">
-                  Log out
-                </button>
-              </div>
+            <div class="button-row single-action">
+              <button id="sign-out" class="btn btn-red" type="button">
+                Log out
+              </button>
             </div>
           </article>
 
-          <!-- Auth card (signed-out view + login/create modes) -->
           <article class="card" id="auth-card" data-signed-out-only>
             <div class="section-title">
               <h2 id="auth-title">Log in</h2>
@@ -134,7 +100,6 @@
               </p>
             </div>
 
-            <!-- Mode toggle -->
             <div class="button-row">
               <button id="auth-mode-login" class="btn btn-ghost active" type="button">
                 Log in
@@ -144,7 +109,6 @@
               </button>
             </div>
 
-            <!-- Auth form -->
             <div class="stack" style="margin-top: var(--space-4);">
               <label>
                 Email
@@ -153,7 +117,7 @@
 
               <label>
                 Password
-                <input id="password" type="password" autocomplete="new-password" />
+                <input id="password" type="password" autocomplete="current-password" />
               </label>
 
               <label id="confirm-password-wrap" hidden>
@@ -176,13 +140,9 @@
             </div>
           </article>
 
-          <!-- Change password -->
           <article class="card" data-signed-in-only hidden>
             <div class="section-title">
               <h2>Change password</h2>
-              <p class="muted">
-                Only available when you are signed in.
-              </p>
             </div>
 
             <div class="stack">
@@ -204,7 +164,6 @@
       </main>
     </div>
 
-    <!-- Sticky submit bar -->
     <div id="sticky-submit-bar" class="sticky-submit-bar hidden">
       <div class="sticky-submit-inner">
         <p id="sticky-save-state" class="sticky-save-state">
@@ -216,18 +175,11 @@
       </div>
     </div>
 
-    <!-- Bottom nav -->
     <nav class="bottom-nav" aria-label="Primary navigation">
       <div class="bottom-nav-grid">
-        <button id="tab-event" class="tab-btn active" type="button">
-          Event
-        </button>
-        <button id="tab-leaderboard" class="tab-btn" type="button">
-          Leaderboard
-        </button>
-        <button id="tab-profile" class="tab-btn" type="button">
-          Account
-        </button>
+        <button id="tab-event" class="tab-btn active" type="button">Event</button>
+        <button id="tab-leaderboard" class="tab-btn" type="button">Leaderboard</button>
+        <button id="tab-profile" class="tab-btn" type="button">Account</button>
       </div>
     </nav>
   </body>
