@@ -16,6 +16,7 @@ let saveTimers = {};
 let saveStateByFight = {};
 let isSubmittedForCurrentEvent = false;
 let currentView = "event";
+let countdownTimer = null;
 
 const emailInput = document.getElementById("email");
 const passwordInput = document.getElementById("password");
@@ -23,25 +24,23 @@ const signUpBtn = document.getElementById("sign-up");
 const signInBtn = document.getElementById("sign-in");
 const signOutBtn = document.getElementById("sign-out");
 const authStatus = document.getElementById("auth-status");
+const profileStatus = document.getElementById("profile-status");
+
+const authCard = document.getElementById("auth-card");
+const accountCard = document.getElementById("account-card");
 
 const newPasswordInput = document.getElementById("new-password");
 const changePasswordBtn = document.getElementById("change-password");
 const passwordStatus = document.getElementById("password-status");
 
-const sessionBox = document.getElementById("session-box");
-
-const loadDataBtn = document.getElementById("load-data");
 const submitAllBtn = document.getElementById("submit-all");
 const dataStatus = document.getElementById("data-status");
 const submissionStatus = document.getElementById("submission-status");
 const revealStatus = document.getElementById("reveal-status");
-const userBox = document.getElementById("user-box");
-const groupBox = document.getElementById("group-box");
 const eventBox = document.getElementById("event-box");
-const fightsBox = document.getElementById("fights-box");
-
-// you can point this to a span/div in your event header
 const countdownBox = document.getElementById("countdown-box");
+const eventBadge = document.getElementById("event-badge");
+const fightsBox = document.getElementById("fights-box");
 
 const othersStatus = document.getElementById("others-status");
 const othersPicksBox = document.getElementById("others-picks-box");
@@ -57,10 +56,8 @@ const stickyBar = document.getElementById("sticky-submit-bar");
 const stickySaveState = document.getElementById("sticky-save-state");
 const stickySubmitBtn = document.getElementById("sticky-submit-btn");
 
-let countdownTimer = null;
-
 function setStatus(el, message) {
-  if (el) el.textContent = message;
+  if (el) el.textContent = message || "";
   if (message) console.log(message);
 }
 
@@ -73,63 +70,6 @@ function getDisplayName(userId) {
     return currentSession.user.email;
   }
   return userId;
-}
-
-function formatEventLabel(event) {
-  if (!event) return "No event found.";
-
-  const name = event.name || "Unnamed event";
-  const eventDate = event.event_date ? new Date(event.event_date).toLocaleString() : "";
-  const lockTime = event.lock_time ? new Date(event.lock_time).toLocaleString() : "";
-
-  if (eventDate && lockTime) {
-    return `${name} — Event: ${eventDate} · Lock: ${lockTime}`;
-  }
-  if (eventDate) {
-    return `${name} — Event: ${eventDate}`;
-  }
-  return name;
-}
-
-function updateCountdown() {
-  if (!countdownBox) return;
-  if (!currentEvent || !currentEvent.lock_time) {
-    countdownBox.textContent = "";
-    return;
-  }
-
-  const now = Date.now();
-  const target = new Date(currentEvent.lock_time).getTime();
-  const diff = target - now;
-
-  if (diff <= 0) {
-    countdownBox.textContent = "Lock time reached — submissions closed.";
-    return;
-  }
-
-  const totalSeconds = Math.floor(diff / 1000);
-  const days = Math.floor(totalSeconds / 86400);
-  const hours = Math.floor((totalSeconds % 86400) / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  const parts = [];
-  if (days) parts.push(`${days}d`);
-  parts.push(`${hours}h`);
-  parts.push(`${minutes}m`);
-  parts.push(`${seconds}s`);
-
-  countdownBox.textContent = `Time until lock: ${parts.join(" ")}`;
-}
-
-function startCountdownTimer() {
-  if (!countdownBox) return;
-  if (countdownTimer) {
-    clearInterval(countdownTimer);
-    countdownTimer = null;
-  }
-  updateCountdown();
-  countdownTimer = setInterval(updateCountdown, 1000);
 }
 
 function switchView(viewName) {
@@ -150,6 +90,14 @@ function initTabs() {
   if (eventTabBtn) eventTabBtn.addEventListener("click", () => switchView("event"));
   if (leaderboardTabBtn) leaderboardTabBtn.addEventListener("click", () => switchView("leaderboard"));
   if (profileTabBtn) profileTabBtn.addEventListener("click", () => switchView("profile"));
+}
+
+function updateAuthPanels() {
+  const loggedIn = !!(currentSession && currentSession.user);
+  if (authCard) authCard.hidden = loggedIn;
+  if (accountCard) accountCard.hidden = !loggedIn;
+  setStatus(authStatus, loggedIn ? `Signed in as ${currentSession.user.email}` : "Not signed in.");
+  setStatus(profileStatus, loggedIn ? `Signed in as ${currentSession.user.email}` : "Not signed in.");
 }
 
 function getDraftFromInputs(fightId) {
@@ -187,7 +135,7 @@ function hasAnyDraftError() {
 }
 
 function getStickyStateMessage() {
-  if (!currentSession || !currentGroup || !currentEvent) return "Load event to start.";
+  if (!currentSession || !currentGroup || !currentEvent) return "Sign in to start.";
   if (isSubmittedForCurrentEvent) return "Your picks are submitted and locked.";
   if (isAnyDraftSaving()) return "Saving picks...";
   if (hasAnyDraftError()) return "Some picks could not be saved.";
@@ -196,8 +144,10 @@ function getStickyStateMessage() {
 }
 
 function updateSubmitButtonState() {
+  const lockReached = hasLockTimePassed();
   const disabled =
     isSubmittedForCurrentEvent ||
+    lockReached ||
     isAnyDraftSaving() ||
     hasAnyDraftError() ||
     !areAllDraftsComplete();
@@ -213,19 +163,90 @@ function updateStickyBar() {
   updateSubmitButtonState();
 }
 
+function formatEventName(event) {
+  if (!event) return "No event found.";
+  return event.name || "Unnamed event";
+}
+
+function hasLockTimePassed() {
+  if (!currentEvent || !currentEvent.lock_time) return false;
+  return Date.now() >= new Date(currentEvent.lock_time).getTime();
+}
+
+function updateEventBadge() {
+  if (!eventBadge) return;
+  if (!currentEvent || !currentSession) {
+    eventBadge.hidden = true;
+    eventBadge.textContent = "";
+    return;
+  }
+
+  let message = "";
+  if (isSubmittedForCurrentEvent) {
+    message = "Submitted";
+  } else if (hasLockTimePassed()) {
+    message = "Locked";
+  }
+
+  eventBadge.hidden = !message;
+  eventBadge.textContent = message;
+}
+
+function updateCountdown() {
+  if (!countdownBox) return;
+  if (!currentEvent || !currentEvent.lock_time) {
+    countdownBox.textContent = "";
+    return;
+  }
+
+  const now = Date.now();
+  const target = new Date(currentEvent.lock_time).getTime();
+  const diff = target - now;
+
+  if (diff <= 0) {
+    countdownBox.textContent = "Submissions closed.";
+    updateEventBadge();
+    updateSubmitButtonState();
+    return;
+  }
+
+  const totalSeconds = Math.floor(diff / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const parts = [];
+  if (days) parts.push(`${days}d`);
+  parts.push(`${hours}h`);
+  parts.push(`${minutes}m`);
+  parts.push(`${seconds}s`);
+
+  countdownBox.textContent = `Locks in ${parts.join(" ")}`;
+}
+
+function startCountdownTimer() {
+  if (countdownTimer) {
+    clearInterval(countdownTimer);
+    countdownTimer = null;
+  }
+  updateCountdown();
+  countdownTimer = setInterval(updateCountdown, 1000);
+}
+
 function renderPickForm(fight, existingPick) {
   const draft = pickDrafts[fight.id] || existingPick || {};
   const selectedWinner = draft.picked_winner || "";
   const selectedMethod = draft.method || "";
   const selectedRound = draft.round_number || "";
   const selectedDecision = draft.decision_type || "";
-  const disabledAttr = isSubmittedForCurrentEvent ? "disabled" : "";
+  const isLocked = isSubmittedForCurrentEvent || hasLockTimePassed();
+  const disabledAttr = isLocked ? "disabled" : "";
+  const lockedClass = isLocked ? " locked" : "";
 
   return `
-    <article class="fight-item card">
-      <div class="fight-title">
-        <strong>Fight ${fight.bout_order}:</strong> ${fight.fighter_a} vs ${fight.fighter_b}
-      </div>
+    <article class="fight-item${lockedClass}">
+      <div class="fight-title">Fight ${fight.bout_order}: ${fight.fighter_a} vs ${fight.fighter_b}</div>
 
       <label>
         Winner
@@ -238,7 +259,7 @@ function renderPickForm(fight, existingPick) {
 
       <label>
         Method
-        <select data-fight-id="${fight.id}" data-field="method" class="method-select" ${disabledAttr}>
+        <select data-fight-id="${fight.id}" data-field="method" ${disabledAttr}>
           <option value="">Select method</option>
           <option value="ko_tko" ${selectedMethod === "ko_tko" ? "selected" : ""}>KO/TKO</option>
           <option value="sub" ${selectedMethod === "sub" ? "selected" : ""}>Submission</option>
@@ -279,14 +300,14 @@ function renderEventScreen() {
   });
 
   if (!currentEvent) {
-    fightsBox.innerHTML = '<div class="card empty-state">No event found.</div>';
+    fightsBox.innerHTML = '<div class="empty-state">No event found.</div>';
     if (countdownBox) countdownBox.textContent = "";
     updateStickyBar();
     return;
   }
 
   if (!currentFights.length) {
-    fightsBox.innerHTML = '<div class="card empty-state">No fights found.</div>';
+    fightsBox.innerHTML = '<div class="empty-state">No fights found.</div>';
     updateStickyBar();
     return;
   }
@@ -301,7 +322,7 @@ function attachFightFormEvents() {
     select.addEventListener("change", async (event) => {
       const fightId = event.target.dataset.fightId;
       const field = event.target.dataset.field;
-      if (!fightId || !field || isSubmittedForCurrentEvent) return;
+      if (!fightId || !field || isSubmittedForCurrentEvent || hasLockTimePassed()) return;
 
       const methodEl = document.querySelector(`[data-fight-id="${fightId}"][data-field="method"]`);
       const method = methodEl ? methodEl.value : "";
@@ -341,7 +362,7 @@ function queueAutosave(fightId) {
   if (statusEl) statusEl.textContent = saveStateByFight[fightId];
   updateSubmitButtonState();
 
-  if (!isFightDraftComplete(pickDrafts[fightId])) return;
+  if (!isFightDraftComplete(pickDrafts[fightId]) || hasLockTimePassed()) return;
   saveTimers[fightId] = setTimeout(() => autosavePick(fightId), 400);
 }
 
@@ -363,7 +384,7 @@ async function hasSubmittedCurrentEvent() {
 
 async function autosavePick(fightId) {
   try {
-    if (!supabaseClient || !currentSession || !currentGroup || !currentEvent || isSubmittedForCurrentEvent) return;
+    if (!supabaseClient || !currentSession || !currentGroup || !currentEvent || isSubmittedForCurrentEvent || hasLockTimePassed()) return;
 
     const draft = pickDrafts[fightId];
     const statusEl = document.getElementById(`pick-status-${fightId}`);
@@ -463,6 +484,7 @@ async function loadSubmissionState() {
       : "Picks stay hidden until everyone has submitted."
   );
 
+  updateEventBadge();
   updateSubmitButtonState();
 }
 
@@ -581,13 +603,18 @@ async function loadLeaderboard() {
 async function submitAllPicks() {
   try {
     if (!supabaseClient || !currentSession || !currentGroup || !currentEvent) {
-      setStatus(dataStatus, "Load app data first.");
+      setStatus(dataStatus, "Sign in first.");
       return;
     }
 
     if (isSubmittedForCurrentEvent) {
       setStatus(dataStatus, "You have already submitted all picks.");
       await loadSubmissionState();
+      return;
+    }
+
+    if (hasLockTimePassed()) {
+      setStatus(dataStatus, "Submissions are closed.");
       return;
     }
 
@@ -629,7 +656,9 @@ async function submitAllPicks() {
     });
 
     setStatus(dataStatus, "All picks submitted.");
+    updateEventBadge();
     updateSubmitButtonState();
+    renderEventScreen();
     await loadSubmissionState();
     await loadSubmittedPicks();
     await loadLeaderboard();
@@ -743,18 +772,16 @@ async function loadAppData() {
 
     const session = await refreshSession();
     if (!session) {
-      setStatus(dataStatus, "You must be signed in.");
+      currentGroup = null;
+      currentEvent = null;
+      currentFights = [];
+      currentOwnPicks = [];
+      renderEventScreen();
+      updateStickyBar();
       return;
     }
 
-    userBox.textContent = JSON.stringify(
-      { id: session.user.id, email: session.user.email },
-      null,
-      2
-    );
-
     currentGroup = await loadCurrentGroup();
-    groupBox.textContent = currentGroup ? JSON.stringify(currentGroup, null, 2) : "No group found.";
 
     if (!currentGroup) {
       fightsBox.innerHTML = "No group found.";
@@ -778,7 +805,7 @@ async function loadAppData() {
     }
 
     currentEvent = eventsResult.data && eventsResult.data.length ? eventsResult.data[0] : null;
-    eventBox.textContent = formatEventLabel(currentEvent);
+    eventBox.textContent = formatEventName(currentEvent);
     startCountdownTimer();
 
     if (!currentEvent) {
@@ -830,13 +857,13 @@ async function loadAppData() {
     });
 
     isSubmittedForCurrentEvent = await hasSubmittedCurrentEvent();
-
+    updateEventBadge();
     renderEventScreen();
     await loadSubmissionState();
     await loadSubmittedPicks();
     await loadLeaderboard();
     updateSubmitButtonState();
-    setStatus(dataStatus, "App data loaded.");
+    setStatus(dataStatus, "");
     switchView("event");
   } catch (err) {
     console.error(err);
@@ -853,8 +880,8 @@ function initSupabase() {
 
     const { createClient } = window.supabase;
     supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
-    setStatus(authStatus, "Ready to sign in.");
-    refreshSession();
+    updateAuthPanels();
+    refreshSession().then(() => loadAppData());
   } catch (err) {
     console.error(err);
     setStatus(authStatus, `Initialization error: ${err.message}`);
@@ -864,8 +891,8 @@ function initSupabase() {
 async function refreshSession() {
   try {
     if (!supabaseClient) {
-      if (sessionBox) sessionBox.textContent = "No active session.";
       currentSession = null;
+      updateAuthPanels();
       return null;
     }
 
@@ -873,37 +900,22 @@ async function refreshSession() {
 
     if (error) {
       console.error(error);
-      setStatus(authStatus, `Could not read session: ${error.message}`);
-      if (sessionBox) sessionBox.textContent = "No active session.";
       currentSession = null;
+      updateAuthPanels();
       return null;
     }
 
     if (!data.session) {
-      if (sessionBox) sessionBox.textContent = "No active session.";
-      setStatus(authStatus, "Not signed in.");
       currentSession = null;
+      updateAuthPanels();
       return null;
     }
 
     currentSession = data.session;
-
-    if (sessionBox) {
-      sessionBox.textContent = JSON.stringify(
-        {
-          user_id: data.session.user.id,
-          email: data.session.user.email
-        },
-        null,
-        2
-      );
-    }
-
-    setStatus(authStatus, `Signed in as ${data.session.user.email}`);
+    updateAuthPanels();
     return data.session;
   } catch (err) {
     console.error(err);
-    setStatus(authStatus, `Session error: ${err.message}`);
     return null;
   }
 }
@@ -912,7 +924,7 @@ if (signUpBtn) {
   signUpBtn.addEventListener("click", async () => {
     try {
       if (!supabaseClient) {
-        setStatus(authStatus, "Supabase is not initialized.");
+        setStatus(profileStatus, "Supabase is not initialized.");
         return;
       }
 
@@ -922,15 +934,16 @@ if (signUpBtn) {
       const { error } = await supabaseClient.auth.signUp({ email, password });
       if (error) {
         console.error(error);
-        setStatus(authStatus, `Signup error: ${error.message}`);
+        setStatus(profileStatus, `Signup error: ${error.message}`);
         return;
       }
 
-      setStatus(authStatus, "Account created.");
+      setStatus(profileStatus, "Account created.");
       await refreshSession();
+      await loadAppData();
     } catch (err) {
       console.error(err);
-      setStatus(authStatus, `Signup exception: ${err.message}`);
+      setStatus(profileStatus, `Signup exception: ${err.message}`);
     }
   });
 }
@@ -939,7 +952,7 @@ if (signInBtn) {
   signInBtn.addEventListener("click", async () => {
     try {
       if (!supabaseClient) {
-        setStatus(authStatus, "Supabase is not initialized.");
+        setStatus(profileStatus, "Supabase is not initialized.");
         return;
       }
 
@@ -949,16 +962,16 @@ if (signInBtn) {
       const result = await supabaseClient.auth.signInWithPassword({ email, password });
       if (result.error) {
         console.error(result.error);
-        setStatus(authStatus, `Login error: ${result.error.message}`);
+        setStatus(profileStatus, `Login error: ${result.error.message}`);
         return;
       }
 
-      setStatus(authStatus, "Login successful.");
+      setStatus(profileStatus, "Login successful.");
       await refreshSession();
       await loadAppData();
     } catch (err) {
       console.error(err);
-      setStatus(authStatus, `Login exception: ${err.message}`);
+      setStatus(profileStatus, `Login exception: ${err.message}`);
     }
   });
 }
@@ -967,14 +980,14 @@ if (signOutBtn) {
   signOutBtn.addEventListener("click", async () => {
     try {
       if (!supabaseClient) {
-        setStatus(authStatus, "No active Supabase client.");
+        setStatus(profileStatus, "No active Supabase client.");
         return;
       }
 
       const { error } = await supabaseClient.auth.signOut();
       if (error) {
         console.error(error);
-        setStatus(authStatus, `Logout error: ${error.message}`);
+        setStatus(profileStatus, `Logout error: ${error.message}`);
         return;
       }
 
@@ -991,31 +1004,38 @@ if (signOutBtn) {
       saveStateByFight = {};
       isSubmittedForCurrentEvent = false;
 
-      if (sessionBox) sessionBox.textContent = "No active session.";
-      if (userBox) userBox.textContent = "No data yet.";
-      if (groupBox) groupBox.textContent = "No data yet.";
-      if (eventBox) eventBox.textContent = "No data yet.";
+      if (countdownTimer) {
+        clearInterval(countdownTimer);
+        countdownTimer = null;
+      }
+
+      if (eventBox) eventBox.textContent = "No event found.";
+      if (countdownBox) countdownBox.textContent = "";
+      if (eventBadge) {
+        eventBadge.hidden = true;
+        eventBadge.textContent = "";
+      }
       if (fightsBox) fightsBox.innerHTML = "No data yet.";
       if (othersPicksBox) othersPicksBox.innerHTML = "Nothing to show yet.";
       if (othersStatus) othersStatus.textContent = "Hidden until everyone has submitted.";
-      if (leaderboardBox) leaderboardBox.innerHTML = "No data yet.";
-      if (countdownBox) countdownBox.textContent = "";
+      if (leaderboardBox) leaderboardBox.innerHTML = '<div class="card">No data yet.</div>';
 
-      setStatus(authStatus, "Logged out.");
+      setStatus(profileStatus, "Logged out.");
+      setStatus(authStatus, "");
       setStatus(passwordStatus, "");
       setStatus(dataStatus, "");
       setStatus(submissionStatus, "");
       setStatus(revealStatus, "");
+      updateAuthPanels();
       updateStickyBar();
       switchView("profile");
     } catch (err) {
       console.error(err);
-      setStatus(authStatus, `Logout exception: ${err.message}`);
+      setStatus(profileStatus, `Logout exception: ${err.message}`);
     }
   });
 }
 
-if (loadDataBtn) loadDataBtn.addEventListener("click", loadAppData);
 if (submitAllBtn) submitAllBtn.addEventListener("click", submitAllPicks);
 if (stickySubmitBtn) stickySubmitBtn.addEventListener("click", submitAllPicks);
 if (changePasswordBtn) changePasswordBtn.addEventListener("click", changePassword);
