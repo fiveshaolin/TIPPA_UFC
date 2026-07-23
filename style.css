@@ -136,6 +136,7 @@ select {
   border-radius: var(--radius-md);
   background: var(--color-surface-2);
   color: var(--color-text);
+  font-size: 16px;
 }
 
 input:focus-visible,
@@ -262,10 +263,6 @@ p {
 
 .section-title.compact {
   margin-bottom: 0;
-}
-
-.compact-hero {
-  gap: var(--space-2);
 }
 
 .muted,
@@ -416,6 +413,22 @@ p {
 .leaderboard-breakdown {
   margin-top: var(--space-3);
   color: var(--color-text-muted);
+}
+
+#view-profile .card {
+  padding: var(--space-5);
+}
+
+#view-profile .section-title {
+  margin-bottom: var(--space-3);
+}
+
+#view-profile .status {
+  margin-bottom: var(--space-2);
+}
+
+#view-profile .button-row {
+  margin-top: var(--space-3);
 }
 
 .bottom-nav {
