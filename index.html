@@ -1,180 +1,234 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
-<head>
-  <meta charset="utf-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
-  />
-  <title>UFC Picks App</title>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>UFC Picks App</title>
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Teko:wght@500;600;700&display=swap" rel="stylesheet">
-  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css" />
-</head>
-<body>
-  <div class="app-shell">
-    <header class="topbar">
-      <div class="topbar-spacer" aria-hidden="true"></div>
-    </header>
+    <!-- Fonts -->
+    <link
+      href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&f[]=teko@500,600&display=swap"
+      rel="stylesheet"
+    />
 
-    <main>
-      <section id="view-event" class="stack">
-        <div class="card hero-card stack event-hero">
-          <div id="event-box" class="event-name">No event found.</div>
-          <div id="countdown-box" class="countdown-box"></div>
-          <div id="event-badge" class="event-badge hidden"></div>
-        </div>
+    <!-- Styles -->
+    <link rel="stylesheet" href="./style.css" />
 
-        <div class="card stack fights-card">
-          <div id="fights-box">No data yet.</div>
-        </div>
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.1/dist/umd/supabase.min.js" defer></script>
 
-        <div class="card stack submitted-picks-card">
-          <div class="section-title compact">
-            <h2>Submitted picks</h2>
-            <p class="subtle">Visible once everyone in the group has submitted.</p>
-          </div>
-          <p id="others-status" class="status">Hidden until everyone has submitted.</p>
-          <div id="others-picks-box">Nothing to show yet.</div>
-        </div>
-      </section>
+    <!-- App JS -->
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <!-- Top bar spacer -->
+      <header class="topbar">
+        <div class="topbar-spacer"></div>
+      </header>
 
-      <section id="view-leaderboard" class="stack" hidden>
-        <div class="card hero-card stack compact-hero">
-          <h2>Leaderboard</h2>
-          <p class="muted">Group standings.</p>
-        </div>
+      <main>
+        <section id="view-event" class="stack">
+          <!-- Event hero -->
+          <article class="card hero-card">
+            <div class="event-hero">
+              <div class="section-title compact">
+                <h1 class="event-name" id="event-box">No event found.</h1>
+                <p class="muted">
+                  Your picks autosave as you go. Submit once when everything is ready.
+                </p>
+              </div>
 
-        <div id="leaderboard-box" class="stack">
-          <div class="card">No data yet.</div>
-        </div>
-      </section>
+              <div class="countdown-box" id="countdown-box"></div>
 
-      <section id="view-profile" class="stack" hidden>
-        <div class="card hero-card stack compact-hero">
-          <h2>Account</h2>
-          <p class="muted">Login, account access and simple settings.</p>
-        </div>
+              <div class="status">
+                <span class="event-badge" id="event-badge" hidden></span>
+              </div>
+            </div>
+          </article>
 
-        <div id="auth-card" class="card stack auth-card">
-          <div class="section-title compact">
-            <h2>Login</h2>
-            <p class="subtle">Create account or log in.</p>
-          </div>
+          <!-- Status + controls -->
+          <article class="card">
+            <div class="section-title">
+              <h2>Status</h2>
+              <p class="muted">Current user, group and event state.</p>
+            </div>
 
-          <label for="email">
-            Email
-            <input id="email" type="email" placeholder="name@example.com" />
-          </label>
-
-          <label for="password">
-            Password
-            <input id="password" type="password" placeholder="Your password" />
-          </label>
-
-          <div class="button-row auth-actions">
-            <button id="sign-in" class="btn btn-blue" type="button">Log in</button>
-            <button id="sign-up" class="btn btn-ghost" type="button">Create account</button>
-          </div>
-        </div>
-
-        <div id="account-card" class="card stack hidden">
-          <div class="section-title compact">
-            <h2>Account</h2>
             <p id="auth-status" class="status">Not signed in.</p>
-          </div>
+            <p id="data-status" class="status"></p>
+            <p id="submission-status" class="status"></p>
+            <p id="reveal-status" class="status"></p>
 
-          <div class="actions single-action">
-            <button id="sign-out" class="btn btn-red" type="button">Log out</button>
-          </div>
-        </div>
+            <div class="actions single-action" data-signed-in-only hidden>
+              <button id="submit-all" class="btn btn-green" type="button">
+                Submit all picks for this event
+              </button>
+            </div>
+          </article>
 
-        <div class="card stack">
-          <div class="section-title compact">
-            <h2>Change password</h2>
-            <p class="subtle">Only available when you are signed in.</p>
-          </div>
+          <!-- Main card picks -->
+          <article class="card fights-card">
+            <div class="section-title">
+              <h2>Main card</h2>
+              <p class="muted">
+                Each fight autosaves once the pick is complete.
+              </p>
+            </div>
+            <div id="fights-box">No data yet.</div>
+          </article>
 
-          <label for="new-password">
-            New password
-            <input id="new-password" type="password" placeholder="Enter new password" />
-          </label>
+          <!-- Submitted picks (others) -->
+          <article class="card submitted-picks-card">
+            <div class="section-title">
+              <h2>Submitted picks</h2>
+              <p class="muted">
+                Visible once everyone in the group has submitted.
+              </p>
+            </div>
+            <p id="others-status" class="status">
+              Hidden until everyone has submitted.
+            </p>
+            <div id="others-picks-box">Nothing to show yet.</div>
+          </article>
+        </section>
 
-          <div class="actions single-action">
-            <button id="change-password" class="btn btn-blue" type="button">Change password</button>
-          </div>
-          <p id="password-status" class="status"></p>
-        </div>
+        <section id="view-leaderboard" class="stack" hidden>
+          <article class="card">
+            <div class="section-title">
+              <h2>Group standings</h2>
+              <p class="muted">Stacked cards keep rankings readable on mobile.</p>
+            </div>
+            <div id="leaderboard-box">No data yet.</div>
+          </article>
+        </section>
 
-        <div class="card stack">
-          <div class="section-title compact">
-            <h2>Status</h2>
-            <p class="subtle">Current sign-in and app state.</p>
-          </div>
-          <p id="profile-status" class="status">Not signed in.</p>
-          <p id="submission-status" class="status"></p>
-          <p id="reveal-status" class="status"></p>
-          <p id="data-status" class="status"></p>
-        </div>
+        <section id="view-profile" class="stack" hidden>
+          <!-- Account (signed-in view) -->
+          <article class="card" id="account-card" data-signed-in-only hidden>
+            <div class="section-title">
+              <h2>Account</h2>
+              <p class="muted">
+                Manage your account once you are signed in.
+              </p>
+            </div>
 
-        <div class="card stack settings-card">
-          <div class="section-title compact">
-            <h2>Settings</h2>
-            <p class="subtle">Theme only for now.</p>
-          </div>
+            <p id="signed-in-status" class="status"></p>
 
-          <div class="actions single-action">
-            <button class="btn btn-ghost" type="button" data-theme-toggle>Toggle dark / light mode</button>
-          </div>
-        </div>
-      </section>
-    </main>
-  </div>
+            <div class="stack">
+              <p><strong>Email</strong><br /><span id="account-email"></span></p>
 
-  <div id="sticky-submit-bar" class="sticky-submit-bar hidden">
-    <div class="sticky-submit-inner">
-      <div id="sticky-save-state" class="sticky-save-state">Load event to start.</div>
-      <button id="sticky-submit-btn" class="btn btn-green" type="button">Submit all picks</button>
-      <button id="submit-all" class="sr-only" type="button">Submit all picks</button>
+              <div class="button-row single-action">
+                <button id="sign-out" class="btn btn-red" type="button">
+                  Log out
+                </button>
+              </div>
+            </div>
+          </article>
+
+          <!-- Auth card (signed-out view + login/create modes) -->
+          <article class="card" id="auth-card" data-signed-out-only>
+            <div class="section-title">
+              <h2 id="auth-title">Log in</h2>
+              <p id="auth-intro" class="muted">
+                Enter your email and password to sign in.
+              </p>
+            </div>
+
+            <!-- Mode toggle -->
+            <div class="button-row">
+              <button id="auth-mode-login" class="btn btn-ghost active" type="button">
+                Log in
+              </button>
+              <button id="auth-mode-create" class="btn btn-ghost" type="button">
+                Create account
+              </button>
+            </div>
+
+            <!-- Auth form -->
+            <div class="stack" style="margin-top: var(--space-4);">
+              <label>
+                Email
+                <input id="email" type="email" autocomplete="email" />
+              </label>
+
+              <label>
+                Password
+                <input id="password" type="password" autocomplete="new-password" />
+              </label>
+
+              <label id="confirm-password-wrap" hidden>
+                Confirm password
+                <input id="confirm-password" type="password" autocomplete="new-password" />
+              </label>
+
+              <p id="profile-status" class="status">
+                Enter your email and password to continue.
+              </p>
+
+              <div class="button-row single-action">
+                <button id="sign-in" class="btn btn-blue" type="button">
+                  Log in
+                </button>
+                <button id="sign-up" class="btn btn-green" type="button" hidden disabled>
+                  Create account
+                </button>
+              </div>
+            </div>
+          </article>
+
+          <!-- Change password -->
+          <article class="card" data-signed-in-only hidden>
+            <div class="section-title">
+              <h2>Change password</h2>
+              <p class="muted">
+                Only available when you are signed in.
+              </p>
+            </div>
+
+            <div class="stack">
+              <label>
+                New password
+                <input id="new-password" type="password" autocomplete="new-password" />
+              </label>
+
+              <p id="password-status" class="status"></p>
+
+              <div class="button-row single-action">
+                <button id="change-password" class="btn btn-primary" type="button">
+                  Update password
+                </button>
+              </div>
+            </div>
+          </article>
+        </section>
+      </main>
     </div>
-  </div>
 
-  <nav class="bottom-nav" aria-label="Primary navigation">
-    <div class="bottom-nav-grid">
-      <button id="tab-event" class="tab-btn active" type="button">Event</button>
-      <button id="tab-leaderboard" class="tab-btn" type="button">Leaderboard</button>
-      <button id="tab-profile" class="tab-btn" type="button">Account</button>
+    <!-- Sticky submit bar -->
+    <div id="sticky-submit-bar" class="sticky-submit-bar hidden">
+      <div class="sticky-submit-inner">
+        <p id="sticky-save-state" class="sticky-save-state">
+          Sign in to start.
+        </p>
+        <button id="sticky-submit-btn" class="btn btn-green" type="button">
+          Submit all picks for this event
+        </button>
+      </div>
     </div>
-  </nav>
 
-  <script>
-    (function () {
-      const toggles = document.querySelectorAll('[data-theme-toggle]');
-      const root = document.documentElement;
-      let theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-
-      function applyTheme() {
-        root.setAttribute('data-theme', theme);
-        toggles.forEach((toggle) => {
-          toggle.setAttribute('aria-label', `Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`);
-        });
-      }
-
-      applyTheme();
-
-      toggles.forEach((toggle) => {
-        toggle.addEventListener('click', () => {
-          theme = theme === 'dark' ? 'light' : 'dark';
-          applyTheme();
-        });
-      });
-    })();
-  </script>
-
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js"></script>
-</body>
+    <!-- Bottom nav -->
+    <nav class="bottom-nav" aria-label="Primary navigation">
+      <div class="bottom-nav-grid">
+        <button id="tab-event" class="tab-btn active" type="button">
+          Event
+        </button>
+        <button id="tab-leaderboard" class="tab-btn" type="button">
+          Leaderboard
+        </button>
+        <button id="tab-profile" class="tab-btn" type="button">
+          Account
+        </button>
+      </div>
+    </nav>
+  </body>
 </html>
