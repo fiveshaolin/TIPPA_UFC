@@ -17,9 +17,16 @@ let saveStateByFight = {};
 let isSubmittedForCurrentEvent = false;
 let currentView = "event";
 let countdownTimer = null;
+let authMode = "login";
 
 const emailInput = document.getElementById("email");
 const passwordInput = document.getElementById("password");
+const confirmPasswordInput = document.getElementById("confirm-password");
+const confirmPasswordWrap = document.getElementById("confirm-password-wrap");
+const authTitle = document.getElementById("auth-title");
+const authIntro = document.getElementById("auth-intro");
+const authModeLoginBtn = document.getElementById("auth-mode-login");
+const authModeCreateBtn = document.getElementById("auth-mode-create");
 const signUpBtn = document.getElementById("sign-up");
 const signInBtn = document.getElementById("sign-in");
 const signOutBtn = document.getElementById("sign-out");
@@ -28,6 +35,10 @@ const profileStatus = document.getElementById("profile-status");
 
 const authCard = document.getElementById("auth-card");
 const accountCard = document.getElementById("account-card");
+const accountEmail = document.getElementById("account-email");
+const signedInStatus = document.getElementById("signed-in-status");
+const signedOutOnly = document.querySelectorAll("[data-signed-out-only]");
+const signedInOnly = document.querySelectorAll("[data-signed-in-only]");
 
 const newPasswordInput = document.getElementById("new-password");
 const changePasswordBtn = document.getElementById("change-password");
@@ -92,12 +103,95 @@ function initTabs() {
   if (profileTabBtn) profileTabBtn.addEventListener("click", () => switchView("profile"));
 }
 
+function isCreateModeValid() {
+  const password = passwordInput ? passwordInput.value.trim() : "";
+  const confirmPassword = confirmPasswordInput ? confirmPasswordInput.value.trim() : "";
+  return password.length >= 6 && confirmPassword.length >= 6 && password === confirmPassword;
+}
+
+function getCreateModeMessage() {
+  const password = passwordInput ? passwordInput.value.trim() : "";
+  const confirmPassword = confirmPasswordInput ? confirmPasswordInput.value.trim() : "";
+
+  if (!password && !confirmPassword) return "Enter your email and create a password.";
+  if (password.length > 0 && password.length < 6) return "Password must be at least 6 characters.";
+  if (!confirmPassword) return "Please re-enter your password.";
+  if (password !== confirmPassword) return "Passwords must match.";
+  return "Passwords match. Ready to create account.";
+}
+
+function setAuthMode(mode) {
+  authMode = mode === "create" ? "create" : "login";
+
+  if (authTitle) authTitle.textContent = authMode === "create" ? "Create account" : "Log in";
+  if (authIntro) {
+    authIntro.textContent =
+      authMode === "create"
+        ? "Enter your email and password twice before creating your account."
+        : "Enter your email and password to sign in.";
+  }
+
+  if (confirmPasswordWrap) confirmPasswordWrap.hidden = authMode !== "create";
+  if (signInBtn) signInBtn.hidden = authMode !== "login";
+  if (signUpBtn) signUpBtn.hidden = authMode !== "create";
+
+  if (authModeLoginBtn) authModeLoginBtn.classList.toggle("active", authMode === "login");
+  if (authModeCreateBtn) authModeCreateBtn.classList.toggle("active", authMode === "create");
+
+  updateCreateAccountButtonState();
+}
+
+function updateCreateAccountButtonState() {
+  if (!signUpBtn) return;
+  if (authMode !== "create") {
+    signUpBtn.disabled = true;
+    return;
+  }
+  signUpBtn.disabled = !isCreateModeValid();
+  setStatus(profileStatus, getCreateModeMessage());
+}
+
+function clearAuthInputs() {
+  if (emailInput) emailInput.value = "";
+  if (passwordInput) passwordInput.value = "";
+  if (confirmPasswordInput) confirmPasswordInput.value = "";
+}
+
 function updateAuthPanels() {
   const loggedIn = !!(currentSession && currentSession.user);
+
   if (authCard) authCard.hidden = loggedIn;
   if (accountCard) accountCard.hidden = !loggedIn;
+
+  signedOutOnly.forEach((el) => {
+    el.hidden = loggedIn;
+  });
+
+  signedInOnly.forEach((el) => {
+    el.hidden = !loggedIn;
+  });
+
+  if (accountEmail) accountEmail.textContent = loggedIn ? currentSession.user.email : "";
+  if (signedInStatus) signedInStatus.textContent = loggedIn ? `Signed in as ${currentSession.user.email}` : "";
+
   setStatus(authStatus, loggedIn ? `Signed in as ${currentSession.user.email}` : "Not signed in.");
-  setStatus(profileStatus, loggedIn ? `Signed in as ${currentSession.user.email}` : "Not signed in.");
+  setStatus(
+    profileStatus,
+    loggedIn ? "" : authMode === "create" ? getCreateModeMessage() : "Enter your email and password to continue."
+  );
+}
+
+function initAuthModeControls() {
+  if (authModeLoginBtn) authModeLoginBtn.addEventListener("click", () => setAuthMode("login"));
+  if (authModeCreateBtn) authModeCreateBtn.addEventListener("click", () => setAuthMode("create"));
+  if (passwordInput) passwordInput.addEventListener("input", updateCreateAccountButtonState);
+  if (confirmPasswordInput) confirmPasswordInput.addEventListener("input", updateCreateAccountButtonState);
+  if (emailInput) {
+    emailInput.addEventListener("input", () => {
+      if (!currentSession) updateCreateAccountButtonState();
+    });
+  }
+  setAuthMode("login");
 }
 
 function getDraftFromInputs(fightId) {
@@ -778,6 +872,7 @@ async function loadAppData() {
       currentOwnPicks = [];
       renderEventScreen();
       updateStickyBar();
+      switchView("profile");
       return;
     }
 
@@ -881,7 +976,14 @@ function initSupabase() {
     const { createClient } = window.supabase;
     supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
     updateAuthPanels();
-    refreshSession().then(() => loadAppData());
+
+    refreshSession().then((session) => {
+      if (session) {
+        loadAppData();
+      } else {
+        switchView("profile");
+      }
+    });
   } catch (err) {
     console.error(err);
     setStatus(authStatus, `Initialization error: ${err.message}`);
@@ -928,6 +1030,11 @@ if (signUpBtn) {
         return;
       }
 
+      if (!isCreateModeValid()) {
+        setStatus(profileStatus, getCreateModeMessage());
+        return;
+      }
+
       const email = emailInput.value.trim();
       const password = passwordInput.value.trim();
 
@@ -939,6 +1046,8 @@ if (signUpBtn) {
       }
 
       setStatus(profileStatus, "Account created.");
+      clearAuthInputs();
+      setAuthMode("login");
       await refreshSession();
       await loadAppData();
     } catch (err) {
@@ -967,6 +1076,7 @@ if (signInBtn) {
       }
 
       setStatus(profileStatus, "Login successful.");
+      clearAuthInputs();
       await refreshSession();
       await loadAppData();
     } catch (err) {
@@ -1020,6 +1130,8 @@ if (signOutBtn) {
       if (othersStatus) othersStatus.textContent = "Hidden until everyone has submitted.";
       if (leaderboardBox) leaderboardBox.innerHTML = '<div class="card">No data yet.</div>';
 
+      clearAuthInputs();
+      setAuthMode("login");
       setStatus(profileStatus, "Logged out.");
       setStatus(authStatus, "");
       setStatus(passwordStatus, "");
@@ -1040,9 +1152,9 @@ if (submitAllBtn) submitAllBtn.addEventListener("click", submitAllPicks);
 if (stickySubmitBtn) stickySubmitBtn.addEventListener("click", submitAllPicks);
 if (changePasswordBtn) changePasswordBtn.addEventListener("click", changePassword);
 
-initSupabase();
-
 document.addEventListener("DOMContentLoaded", () => {
   initTabs();
-  switchView("event");
+  initAuthModeControls();
+  initSupabase();
+  switchView("profile");
 });
