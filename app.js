@@ -35,7 +35,6 @@ const profileStatus = document.getElementById("profile-status");
 
 const authCard = document.getElementById("auth-card");
 const accountCard = document.getElementById("account-card");
-const accountEmail = document.getElementById("account-email");
 const signedInStatus = document.getElementById("signed-in-status");
 const signedOutOnly = document.querySelectorAll("[data-signed-out-only]");
 const signedInOnly = document.querySelectorAll("[data-signed-in-only]");
@@ -45,9 +44,6 @@ const changePasswordBtn = document.getElementById("change-password");
 const passwordStatus = document.getElementById("password-status");
 
 const submitAllBtn = document.getElementById("submit-all");
-const dataStatus = document.getElementById("data-status");
-const submissionStatus = document.getElementById("submission-status");
-const revealStatus = document.getElementById("reveal-status");
 const eventBox = document.getElementById("event-box");
 const countdownBox = document.getElementById("countdown-box");
 const eventBadge = document.getElementById("event-badge");
@@ -104,16 +100,19 @@ function initTabs() {
 }
 
 function isCreateModeValid() {
+  const email = emailInput ? emailInput.value.trim() : "";
   const password = passwordInput ? passwordInput.value.trim() : "";
   const confirmPassword = confirmPasswordInput ? confirmPasswordInput.value.trim() : "";
-  return password.length >= 6 && confirmPassword.length >= 6 && password === confirmPassword;
+  return !!email && password.length >= 6 && confirmPassword.length >= 6 && password === confirmPassword;
 }
 
 function getCreateModeMessage() {
+  const email = emailInput ? emailInput.value.trim() : "";
   const password = passwordInput ? passwordInput.value.trim() : "";
   const confirmPassword = confirmPasswordInput ? confirmPasswordInput.value.trim() : "";
 
-  if (!password && !confirmPassword) return "Enter your email and create a password.";
+  if (!email) return "Enter your email address.";
+  if (!password && !confirmPassword) return "Create a password and enter it twice.";
   if (password.length > 0 && password.length < 6) return "Password must be at least 6 characters.";
   if (!confirmPassword) return "Please re-enter your password.";
   if (password !== confirmPassword) return "Passwords must match.";
@@ -171,8 +170,9 @@ function updateAuthPanels() {
     el.hidden = !loggedIn;
   });
 
-  if (accountEmail) accountEmail.textContent = loggedIn ? currentSession.user.email : "";
-  if (signedInStatus) signedInStatus.textContent = loggedIn ? `Signed in as ${currentSession.user.email}` : "";
+  if (signedInStatus) {
+    signedInStatus.textContent = loggedIn ? `Signed in as ${currentSession.user.email}` : "";
+  }
 
   setStatus(authStatus, loggedIn ? `Signed in as ${currentSession.user.email}` : "Not signed in.");
   setStatus(
@@ -231,6 +231,7 @@ function hasAnyDraftError() {
 function getStickyStateMessage() {
   if (!currentSession || !currentGroup || !currentEvent) return "Sign in to start.";
   if (isSubmittedForCurrentEvent) return "Your picks are submitted and locked.";
+  if (hasLockTimePassed()) return "This event is locked.";
   if (isAnyDraftSaving()) return "Saving picks...";
   if (hasAnyDraftError()) return "Some picks could not be saved.";
   if (!areAllDraftsComplete()) return "Complete all picks to submit.";
@@ -394,19 +395,21 @@ function renderEventScreen() {
   });
 
   if (!currentEvent) {
-    fightsBox.innerHTML = '<div class="empty-state">No event found.</div>';
+    if (fightsBox) fightsBox.innerHTML = '<div class="empty-state">No event found.</div>';
     if (countdownBox) countdownBox.textContent = "";
     updateStickyBar();
     return;
   }
 
   if (!currentFights.length) {
-    fightsBox.innerHTML = '<div class="empty-state">No fights found.</div>';
+    if (fightsBox) fightsBox.innerHTML = '<div class="empty-state">No fights found.</div>';
     updateStickyBar();
     return;
   }
 
-  fightsBox.innerHTML = currentFights.map((fight) => renderPickForm(fight, picksMap[fight.id])).join("");
+  if (fightsBox) {
+    fightsBox.innerHTML = currentFights.map((fight) => renderPickForm(fight, picksMap[fight.id])).join("");
+  }
   attachFightFormEvents();
   updateStickyBar();
 }
@@ -478,7 +481,9 @@ async function hasSubmittedCurrentEvent() {
 
 async function autosavePick(fightId) {
   try {
-    if (!supabaseClient || !currentSession || !currentGroup || !currentEvent || isSubmittedForCurrentEvent || hasLockTimePassed()) return;
+    if (!supabaseClient || !currentSession || !currentGroup || !currentEvent || isSubmittedForCurrentEvent || hasLockTimePassed()) {
+      return;
+    }
 
     const draft = pickDrafts[fightId];
     const statusEl = document.getElementById(`pick-status-${fightId}`);
@@ -545,7 +550,6 @@ async function loadSubmissionState() {
 
   if (memberError) {
     console.error(memberError);
-    setStatus(submissionStatus, `Error loading members: ${memberError.message}`);
     return;
   }
 
@@ -557,7 +561,6 @@ async function loadSubmissionState() {
 
   if (submissionsError) {
     console.error(submissionsError);
-    setStatus(submissionStatus, `Error loading submissions: ${submissionsError.message}`);
     return;
   }
 
@@ -565,18 +568,7 @@ async function loadSubmissionState() {
   const ownSubmitted = submissions.some((row) => row.user_id === currentSession.user.id);
 
   isSubmittedForCurrentEvent = ownSubmitted;
-  setStatus(
-    submissionStatus,
-    `${submittedCount} of ${memberCount || 0} have submitted. You are ${ownSubmitted ? "done" : "not done"}.`
-  );
-
   currentRevealOpen = memberCount > 0 && submittedCount >= memberCount;
-  setStatus(
-    revealStatus,
-    currentRevealOpen
-      ? "Everyone has submitted. Picks are now visible."
-      : "Picks stay hidden until everyone has submitted."
-  );
 
   updateEventBadge();
   updateSubmitButtonState();
@@ -590,6 +582,8 @@ function describePick(pick) {
 }
 
 async function loadSubmittedPicks() {
+  if (!othersStatus || !othersPicksBox) return;
+
   if (!currentRevealOpen) {
     othersStatus.textContent = "Hidden until everyone has submitted.";
     othersPicksBox.innerHTML = "Nothing to show yet.";
@@ -697,33 +691,19 @@ async function loadLeaderboard() {
 async function submitAllPicks() {
   try {
     if (!supabaseClient || !currentSession || !currentGroup || !currentEvent) {
-      setStatus(dataStatus, "Sign in first.");
       return;
     }
 
     if (isSubmittedForCurrentEvent) {
-      setStatus(dataStatus, "You have already submitted all picks.");
       await loadSubmissionState();
       return;
     }
 
     if (hasLockTimePassed()) {
-      setStatus(dataStatus, "Submissions are closed.");
       return;
     }
 
-    if (isAnyDraftSaving()) {
-      setStatus(dataStatus, "Please wait until all picks are saved.");
-      return;
-    }
-
-    if (hasAnyDraftError()) {
-      setStatus(dataStatus, "Fix save errors before submitting.");
-      return;
-    }
-
-    if (!areAllDraftsComplete()) {
-      setStatus(dataStatus, "Complete all picks before submitting.");
+    if (isAnyDraftSaving() || hasAnyDraftError() || !areAllDraftsComplete()) {
       return;
     }
 
@@ -740,7 +720,6 @@ async function submitAllPicks() {
 
     if (error) {
       console.error(error);
-      setStatus(dataStatus, `Error submitting picks: ${error.message}`);
       return;
     }
 
@@ -749,7 +728,6 @@ async function submitAllPicks() {
       el.disabled = true;
     });
 
-    setStatus(dataStatus, "All picks submitted.");
     updateEventBadge();
     updateSubmitButtonState();
     renderEventScreen();
@@ -758,7 +736,6 @@ async function submitAllPicks() {
     await loadLeaderboard();
   } catch (err) {
     console.error(err);
-    setStatus(dataStatus, `Unexpected submit error: ${err.message}`);
   }
 }
 
@@ -806,7 +783,6 @@ async function loadCurrentGroup() {
 
   if (membershipResult.error) {
     console.error(membershipResult.error);
-    setStatus(dataStatus, `Error loading group membership: ${membershipResult.error.message}`);
     return null;
   }
 
@@ -818,7 +794,6 @@ async function loadCurrentGroup() {
 
   if (groupResult.error) {
     console.error(groupResult.error);
-    setStatus(dataStatus, `Error loading group: ${groupResult.error.message}`);
     return null;
   }
 
@@ -859,10 +834,7 @@ async function loadProfilesForCurrentGroup() {
 
 async function loadAppData() {
   try {
-    if (!supabaseClient) {
-      setStatus(dataStatus, "Supabase is not initialized.");
-      return;
-    }
+    if (!supabaseClient) return;
 
     const session = await refreshSession();
     if (!session) {
@@ -879,7 +851,7 @@ async function loadAppData() {
     currentGroup = await loadCurrentGroup();
 
     if (!currentGroup) {
-      fightsBox.innerHTML = "No group found.";
+      if (fightsBox) fightsBox.innerHTML = "No group found.";
       if (countdownBox) countdownBox.textContent = "";
       updateStickyBar();
       return;
@@ -895,16 +867,15 @@ async function loadAppData() {
 
     if (eventsResult.error) {
       console.error(eventsResult.error);
-      setStatus(dataStatus, `Error loading event: ${eventsResult.error.message}`);
       return;
     }
 
     currentEvent = eventsResult.data && eventsResult.data.length ? eventsResult.data[0] : null;
-    eventBox.textContent = formatEventName(currentEvent);
+    if (eventBox) eventBox.textContent = formatEventName(currentEvent);
     startCountdownTimer();
 
     if (!currentEvent) {
-      fightsBox.innerHTML = "No fights found.";
+      if (fightsBox) fightsBox.innerHTML = "No fights found.";
       updateStickyBar();
       return;
     }
@@ -918,7 +889,6 @@ async function loadAppData() {
 
     if (fightsResult.error) {
       console.error(fightsResult.error);
-      setStatus(dataStatus, `Error loading fights: ${fightsResult.error.message}`);
       return;
     }
 
@@ -933,7 +903,6 @@ async function loadAppData() {
 
     if (picksResult.error) {
       console.error(picksResult.error);
-      setStatus(dataStatus, `Error loading picks: ${picksResult.error.message}`);
       return;
     }
 
@@ -958,11 +927,9 @@ async function loadAppData() {
     await loadSubmittedPicks();
     await loadLeaderboard();
     updateSubmitButtonState();
-    setStatus(dataStatus, "");
     switchView("event");
   } catch (err) {
     console.error(err);
-    setStatus(dataStatus, `Unexpected error: ${err.message}`);
   }
 }
 
@@ -1135,9 +1102,6 @@ if (signOutBtn) {
       setStatus(profileStatus, "Logged out.");
       setStatus(authStatus, "");
       setStatus(passwordStatus, "");
-      setStatus(dataStatus, "");
-      setStatus(submissionStatus, "");
-      setStatus(revealStatus, "");
       updateAuthPanels();
       updateStickyBar();
       switchView("profile");
