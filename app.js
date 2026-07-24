@@ -853,7 +853,7 @@ function getLatestEventBonusLabels(row) {
 
   if (highestScoreBonus > 0) labels.push(`Highest score bonus +${highestScoreBonus}`);
   if (flushBonus > 0) labels.push(`Flush bonus +${flushBonus}`);
-  if (royalFlushBonus > 0) labels.push(`Royal flush bonus +${royFlushBonus}`);
+  if (royalFlushBonus > 0) labels.push(`Royal flush bonus +${royalFlushBonus}`);
   return labels;
 }
 
