@@ -166,9 +166,22 @@ function setAuthMode(mode) {
   if (signInBtn) signInBtn.hidden = authMode !== "login";
   if (signUpBtn) signUpBtn.hidden = authMode !== "create";
 
+  if (passwordInput) {
+    passwordInput.setAttribute(
+      "autocomplete",
+      authMode === "create" ? "new-password" : "current-password"
+    );
+  }
+
+  if (confirmPasswordInput) {
+    confirmPasswordInput.setAttribute("autocomplete", "new-password");
+  }
+
   if (authModeLoginBtn) authModeLoginBtn.classList.toggle("active", authMode === "login");
   if (authModeCreateBtn) authModeCreateBtn.classList.toggle("active", authMode === "create");
 
+  updateCreateAccountButtonState();
+}
   updateCreateAccountButtonState();
 }
 
