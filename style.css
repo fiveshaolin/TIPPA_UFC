@@ -389,13 +389,18 @@ select:focus {
   display: none;
 }
 
+.leaderboard-main {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
 .leaderboard-rank {
   font-weight: 700;
   font-size: var(--text-base);
 }
 
-.leaderboard-subline,
-.leaderboard-breakdown {
+.leaderboard-subline {
   color: var(--color-text-muted);
   font-size: var(--text-sm);
 }
@@ -409,6 +414,47 @@ select:focus {
 
 .leaderboard-breakdown {
   padding: 0 var(--space-4) var(--space-4);
+  display: grid;
+  gap: var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.leaderboard-detail-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.leaderboard-detail-label {
+  color: var(--color-text-muted);
+}
+
+.leaderboard-detail-row strong {
+  color: var(--color-text);
+  font-weight: 700;
+  text-align: right;
+}
+
+.leaderboard-bonuses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.leaderboard-bonus-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(215, 255, 63, 0.12);
+  border: 1px solid rgba(215, 255, 63, 0.26);
+  color: var(--color-primary);
+  font-size: var(--text-xs);
+  font-weight: 700;
 }
 
 .empty-state {
