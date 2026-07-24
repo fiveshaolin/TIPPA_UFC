@@ -149,6 +149,7 @@ main {
   margin-bottom: 0;
 }
 
+.section-title h1,
 .section-title h2,
 .event-name {
   margin: 0;
@@ -455,6 +456,21 @@ select:focus {
   color: var(--color-primary);
   font-size: var(--text-xs);
   font-weight: 700;
+}
+
+.scoring-list {
+  margin: var(--space-3) 0 0;
+  padding-left: 1.1rem;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.scoring-list li + li {
+  margin-top: var(--space-2);
+}
+
+.scoring-list strong {
+  color: var(--color-text);
 }
 
 .empty-state {
