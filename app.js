@@ -754,11 +754,11 @@ function renderLeaderboard() {
           <summary>
             <div>
               <div class="leaderboard-rank">${rank}. ${name}</div>
-              <div class="leaderboard-subline">Opening: ${openingPoints} · App: ${appPoints}</div>
+              <div class="leaderboard-subline">Opening: ${openingPoints} Â· App: ${appPoints}</div>
             </div>
             <div class="leaderboard-total">${currentPoints}</div>
           </summary>
-          <div class="leaderboard-breakdown">Season ${seasonYear} · Current total: ${currentPoints}</div>
+          <div class="leaderboard-breakdown">Season ${seasonYear} Â· Current total: ${currentPoints}</div>
         </details>
       `;
     })
