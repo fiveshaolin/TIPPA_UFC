@@ -18,6 +18,8 @@ let isSubmittedForCurrentEvent = false;
 let currentView = "event";
 let countdownTimer = null;
 let authMode = "login";
+let authStateSubscription = null;
+let authChangeInFlight = false;
 
 const emailInput = document.getElementById("email");
 const passwordInput = document.getElementById("password");
@@ -74,6 +76,13 @@ function setStatus(el, message) {
   if (message) console.log(message);
 }
 
+function clearCountdownTimer() {
+  if (countdownTimer) {
+    clearInterval(countdownTimer);
+    countdownTimer = null;
+  }
+}
+
 function resetAppState() {
   currentSession = null;
   currentGroup = null;
@@ -87,11 +96,31 @@ function resetAppState() {
   saveTimers = {};
   saveStateByFight = {};
   isSubmittedForCurrentEvent = false;
+  clearCountdownTimer();
+}
 
-  if (countdownTimer) {
-    clearInterval(countdownTimer);
-    countdownTimer = null;
+function resetSignedOutUI() {
+  if (eventBox) eventBox.textContent = "No event found.";
+  if (countdownBox) countdownBox.textContent = "";
+  if (eventBadge) {
+    eventBadge.hidden = true;
+    eventBadge.textContent = "";
   }
+  if (fightsBox) fightsBox.innerHTML = '<div class="empty-state">No data yet.</div>';
+  if (othersPicksBox) othersPicksBox.innerHTML = "Nothing to show yet.";
+  if (othersStatus) othersStatus.textContent = "Hidden until everyone has submitted.";
+  if (leaderboardBox) leaderboardBox.innerHTML = '<div class="card">No data yet.</div>';
+
+  clearAuthInputs();
+  if (profileDisplayNameInput) profileDisplayNameInput.value = "";
+  if (newPasswordInput) newPasswordInput.value = "";
+
+  setAuthMode("login");
+  setStatus(authStatus, "Not signed in.");
+  setStatus(passwordStatus, "");
+  updateAuthPanels();
+  updateStickyBar();
+  switchView("profile");
 }
 
 function getDisplayName(userId) {
@@ -180,8 +209,6 @@ function setAuthMode(mode) {
   if (authModeLoginBtn) authModeLoginBtn.classList.toggle("active", authMode === "login");
   if (authModeCreateBtn) authModeCreateBtn.classList.toggle("active", authMode === "create");
 
-  updateCreateAccountButtonState();
-}
   updateCreateAccountButtonState();
 }
 
@@ -386,10 +413,7 @@ function updateCountdown() {
 }
 
 function startCountdownTimer() {
-  if (countdownTimer) {
-    clearInterval(countdownTimer);
-    countdownTimer = null;
-  }
+  clearCountdownTimer();
   updateCountdown();
   countdownTimer = setInterval(updateCountdown, 1000);
 }
@@ -648,6 +672,12 @@ function describePick(pick) {
 
 async function loadSubmittedPicks() {
   if (!othersStatus || !othersPicksBox) return;
+
+  if (!currentSession || !currentGroup || !currentEvent) {
+    othersStatus.textContent = "Hidden until everyone has submitted.";
+    othersPicksBox.innerHTML = "Nothing to show yet.";
+    return;
+  }
 
   if (!currentRevealOpen) {
     othersStatus.textContent = "Hidden until everyone has submitted.";
@@ -999,23 +1029,14 @@ async function ensureOwnProfileExists() {
   });
 }
 
-async function loadAppData() {
+async function loadAppData(preferredView = null) {
   try {
     if (!supabaseClient) return;
 
     const session = await refreshSession();
     if (!session) {
       resetAppState();
-      if (eventBox) eventBox.textContent = "No event found.";
-      if (fightsBox) fightsBox.innerHTML = '<div class="empty-state">No data yet.</div>';
-      if (othersPicksBox) othersPicksBox.innerHTML = "Nothing to show yet.";
-      if (othersStatus) othersStatus.textContent = "Hidden until everyone has submitted.";
-      if (leaderboardBox) leaderboardBox.innerHTML = '<div class="card">No data yet.</div>';
-      renderEventScreen();
-      renderLeaderboard();
-      updateAuthPanels();
-      updateStickyBar();
-      switchView("profile");
+      resetSignedOutUI();
       return;
     }
 
@@ -1028,6 +1049,7 @@ async function loadAppData() {
       renderLeaderboard();
       updateAuthPanels();
       updateStickyBar();
+      if (preferredView) switchView(preferredView);
       return;
     }
 
@@ -1055,6 +1077,11 @@ async function loadAppData() {
       currentLeaderboard = [];
       renderLeaderboard();
       updateStickyBar();
+      if (preferredView) {
+        switchView(preferredView);
+      } else if (currentView !== "leaderboard" && currentView !== "profile") {
+        switchView("event");
+      }
       return;
     }
 
@@ -1106,38 +1133,14 @@ async function loadAppData() {
     await loadSubmittedPicks();
     await loadLeaderboard();
     updateSubmitButtonState();
-    switchView("event");
-  } catch (err) {
-    console.error(err);
-  }
-}
 
-function initSupabase() {
-  try {
-    if (!window.supabase) {
-      setStatus(authStatus, "Supabase library failed to load.");
-      return;
+    if (preferredView) {
+      switchView(preferredView);
+    } else if (currentView !== "leaderboard" && currentView !== "profile") {
+      switchView("event");
     }
-
-    const { createClient } = window.supabase;
-    supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
-    updateAuthPanels();
-
-    refreshSession().then((session) => {
-      if (session) {
-        loadAppData();
-      } else {
-        switchView("profile");
-      }
-    });
-
-    supabaseClient.auth.onAuthStateChange(async () => {
-      await refreshSession();
-      await loadAppData();
-    });
   } catch (err) {
     console.error(err);
-    setStatus(authStatus, `Initialization error: ${err.message}`);
   }
 }
 
@@ -1170,6 +1173,62 @@ async function refreshSession() {
   } catch (err) {
     console.error(err);
     return null;
+  }
+}
+
+async function handleAuthStateChange(event) {
+  if (authChangeInFlight) return;
+  authChangeInFlight = true;
+
+  try {
+    await refreshSession();
+
+    if (event === "SIGNED_OUT" || !currentSession) {
+      resetAppState();
+      resetSignedOutUI();
+      return;
+    }
+
+    if (event === "SIGNED_IN") {
+      await loadAppData("event");
+      return;
+    }
+
+    await loadAppData();
+  } finally {
+    authChangeInFlight = false;
+  }
+}
+
+function initSupabase() {
+  try {
+    if (!window.supabase) {
+      setStatus(authStatus, "Supabase library failed to load.");
+      return;
+    }
+
+    const { createClient } = window.supabase;
+    supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+    updateAuthPanels();
+
+    refreshSession().then((session) => {
+      if (session) {
+        loadAppData();
+      } else {
+        resetSignedOutUI();
+      }
+    });
+
+    const { data } = supabaseClient.auth.onAuthStateChange((event) => {
+      setTimeout(() => {
+        handleAuthStateChange(event);
+      }, 0);
+    });
+
+    authStateSubscription = data?.subscription || null;
+  } catch (err) {
+    console.error(err);
+    setStatus(authStatus, `Initialization error: ${err.message}`);
   }
 }
 
@@ -1224,9 +1283,12 @@ if (signUpBtn) {
 
       setStatus(profileStatus, "Account created.");
       clearAuthInputs();
-      setAuthMode("login");
       await refreshSession();
-      await loadAppData();
+      if (currentSession) {
+        await loadAppData("event");
+      } else {
+        setAuthMode("login");
+      }
     } catch (err) {
       console.error(err);
       setStatus(profileStatus, `Signup exception: ${err.message}`);
@@ -1255,7 +1317,7 @@ if (signInBtn) {
       setStatus(profileStatus, "Login successful.");
       clearAuthInputs();
       await refreshSession();
-      await loadAppData();
+      await loadAppData("event");
     } catch (err) {
       console.error(err);
       setStatus(profileStatus, `Login exception: ${err.message}`);
@@ -1271,36 +1333,14 @@ if (signOutBtn) {
         return;
       }
 
-      const { error } = await supabaseClient.auth.signOut();
+      const { error } = await supabaseClient.auth.signOut({ scope: "local" });
       if (error) {
         console.error(error);
         setStatus(profileStatus, `Logout error: ${error.message}`);
         return;
       }
 
-      resetAppState();
-
-      if (eventBox) eventBox.textContent = "No event found.";
-      if (countdownBox) countdownBox.textContent = "";
-      if (eventBadge) {
-        eventBadge.hidden = true;
-        eventBadge.textContent = "";
-      }
-      if (fightsBox) fightsBox.innerHTML = "No data yet.";
-      if (othersPicksBox) othersPicksBox.innerHTML = "Nothing to show yet.";
-      if (othersStatus) othersStatus.textContent = "Hidden until everyone has submitted.";
-      if (leaderboardBox) leaderboardBox.innerHTML = '<div class="card">No data yet.</div>';
-
-      clearAuthInputs();
-      if (profileDisplayNameInput) profileDisplayNameInput.value = "";
-      if (newPasswordInput) newPasswordInput.value = "";
-      setAuthMode("login");
       setStatus(profileStatus, "Logged out.");
-      setStatus(authStatus, "");
-      setStatus(passwordStatus, "");
-      updateAuthPanels();
-      updateStickyBar();
-      switchView("profile");
     } catch (err) {
       console.error(err);
       setStatus(profileStatus, `Logout exception: ${err.message}`);
