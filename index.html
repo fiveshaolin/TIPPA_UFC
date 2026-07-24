@@ -2,241 +2,205 @@
 <html lang="en" data-theme="light">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
     <title>UFC Picks App</title>
 
     <link
-      href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap"
+      href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&f[]=teko@500,600&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./style.css" />
+
+    <script
+      src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.1/dist/umd/supabase.min.js"
+      defer
+    ></script>
+    <script src="./app.js" defer></script>
   </head>
   <body>
     <div class="app-shell">
       <header class="topbar">
-        <div class="brand">
-          <div class="brand-mark">
-            <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="UFC Picks logo">
-              <path
-                d="M12 46L24 18L32 34L40 18L52 46"
-                stroke="currentColor"
-                stroke-width="5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-              <path d="M20 46H44" stroke="currentColor" stroke-width="5" stroke-linecap="round" />
-            </svg>
-            <span>UFC Picks</span>
-          </div>
-          <div class="brand-copy">Mobile-first picks for your group.</div>
-        </div>
-
-        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch theme">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-          </svg>
-        </button>
+        <div class="topbar-spacer"></div>
       </header>
 
       <main>
         <section id="view-event" class="stack">
-          <div class="card hero-card stack">
-            <div class="pill">Event</div>
-            <h1>Make your picks</h1>
-            <p class="muted">Your picks autosave as you go. Submit once when everything is ready.</p>
-            <div class="hero-meta">
-              <div>
-                <div class="hero-meta-label">Current event</div>
-                <div id="event-box" class="hero-meta-value">No event found.</div>
+          <article class="card hero-card">
+            <div class="event-hero">
+              <div class="section-title compact">
+                <h1 class="event-name" id="event-box">No event found.</h1>
+                <p class="muted">
+                  Your picks autosave as you go. Submit once when everything is ready.
+                </p>
               </div>
-              <div class="hero-meta-right">
-                <span id="event-badge" class="pill subtle-pill" hidden></span>
-                <div id="countdown-box" class="countdown-text"></div>
+
+              <div class="countdown-box" id="countdown-box"></div>
+
+              <div class="status">
+                <span class="event-badge" id="event-badge" hidden></span>
               </div>
             </div>
-          </div>
+          </article>
 
-          <div class="card stack">
+          <article class="card fights-card">
             <div class="section-title">
               <h2>Main card</h2>
-              <p class="subtle">Each fight autosaves once the pick is complete.</p>
+              <p class="muted">Each fight autosaves once the pick is complete.</p>
             </div>
             <div id="fights-box">No data yet.</div>
-          </div>
+          </article>
 
-          <div class="card stack">
+          <article class="card submitted-picks-card">
             <div class="section-title">
               <h2>Submitted picks</h2>
-              <p class="subtle">Visible once everyone in the group has submitted.</p>
+              <p class="muted">
+                Once everyone has locked in, you’ll see the full card here.
+              </p>
             </div>
-            <p id="others-status" class="status">Hidden until everyone has submitted.</p>
+            <p id="others-status" class="status">
+              Hidden until everyone has submitted.
+            </p>
             <div id="others-picks-box">Nothing to show yet.</div>
-          </div>
+          </article>
         </section>
 
         <section id="view-leaderboard" class="stack" hidden>
-          <div class="card hero-card stack">
-            <div class="pill">Leaderboard</div>
-
-            <div class="leaderboard-header-row">
+          <article class="card">
+            <div class="section-title">
               <h2>Group standings</h2>
-              <button
-                id="leaderboard-info-btn"
-                class="icon-btn"
-                type="button"
-                aria-label="Open scoring explanation"
-                aria-haspopup="dialog"
-                aria-controls="scoring-modal"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <circle cx="12" cy="12" r="9"></circle>
-                  <path d="M12 10V16"></path>
-                  <circle cx="12" cy="7" r="1"></circle>
-                </svg>
-              </button>
+              <p class="muted">Stacked cards keep rankings readable on mobile.</p>
             </div>
-          </div>
-
-          <div id="leaderboard-box" class="stack">
-            <div class="card">No data yet.</div>
-          </div>
+            <div id="leaderboard-box">No data yet.</div>
+          </article>
         </section>
 
         <section id="view-profile" class="stack" hidden>
-          <div class="card hero-card stack">
-            <div class="pill">Profile</div>
-            <h2>Account</h2>
-            <p class="muted">Create your account, manage your display name, and update your password.</p>
-          </div>
-
-          <div id="auth-card" class="card stack">
+          <article class="card" id="account-card" data-signed-in-only hidden>
             <div class="section-title">
-              <h2 id="auth-title">Log in</h2>
-              <p id="auth-intro" class="subtle">Enter your email and password to sign in.</p>
+              <h2>Account</h2>
+              <p class="muted">Manage the name shown on the leaderboard.</p>
             </div>
 
-            <div class="auth-mode-switch" role="tablist" aria-label="Authentication mode">
-              <button
-                id="auth-mode-login"
-                class="auth-mode-btn active"
-                type="button"
-                role="tab"
-                aria-selected="true"
-              >
-                Log in
-              </button>
-              <button
-                id="auth-mode-create"
-                class="auth-mode-btn"
-                type="button"
-                role="tab"
-                aria-selected="false"
-              >
-                Create account
-              </button>
-            </div>
+            <p id="signed-in-status" class="status"></p>
 
-            <div id="display-name-wrap" hidden>
-              <label for="display-name">
-                Display name
-                <input
-                  id="display-name"
-                  type="text"
-                  placeholder="What should appear on the leaderboard?"
-                  autocomplete="nickname"
-                />
-              </label>
-            </div>
-
-            <label for="email">
-              Email
-              <input id="email" type="email" placeholder="name@example.com" autocomplete="email" />
-            </label>
-
-            <label for="password">
-              Password
-              <input id="password" type="password" placeholder="Your password" autocomplete="current-password" />
-            </label>
-
-            <div id="confirm-password-wrap" hidden>
-              <label for="confirm-password">
-                Confirm password
-                <input
-                  id="confirm-password"
-                  type="password"
-                  placeholder="Enter the same password again"
-                  autocomplete="new-password"
-                />
-              </label>
-            </div>
-
-            <div class="button-row auth-actions">
-              <button id="sign-in" class="btn btn-blue" type="button">Log in</button>
-              <button id="sign-up" class="btn btn-primary" type="button" hidden>Create account</button>
-            </div>
-
-            <p id="auth-status" class="status">Not signed in.</p>
-            <p id="profile-status" class="status"></p>
-          </div>
-
-          <div id="account-card" class="card stack" hidden>
-            <div class="section-title">
-              <h2>Your account</h2>
-              <p id="signed-in-status" class="subtle"></p>
-            </div>
-
-            <div class="stack">
+            <div class="stack" style="margin-top: var(--space-4);">
               <label for="profile-display-name">
                 Display name
                 <input
                   id="profile-display-name"
                   type="text"
-                  placeholder="Update your leaderboard name"
                   autocomplete="nickname"
+                  placeholder="David"
                 />
               </label>
 
-              <div class="actions">
+              <div class="button-row single-action">
                 <button id="save-display-name" class="btn btn-primary" type="button">
-                  Save display name
+                  Save name
                 </button>
               </div>
             </div>
 
-            <div class="section-divider"></div>
+            <div class="button-row single-action" style="margin-top: var(--space-4);">
+              <button id="sign-out" class="btn btn-red" type="button">
+                Log out
+              </button>
+            </div>
+          </article>
 
-            <div class="stack">
-              <div class="section-title">
-                <h2>Change password</h2>
-                <p class="subtle">Only available when you are signed in.</p>
-              </div>
+          <article class="card" id="auth-card" data-signed-out-only>
+            <div class="section-title">
+              <h2 id="auth-title">Log in</h2>
+              <p id="auth-intro" class="muted">
+                Enter your email and password to sign in.
+              </p>
+            </div>
 
-              <label for="new-password">
-                New password
-                <input id="new-password" type="password" placeholder="Enter new password" autocomplete="new-password" />
+            <div class="button-row">
+              <button id="auth-mode-login" class="btn btn-ghost active" type="button">
+                Log in
+              </button>
+              <button id="auth-mode-create" class="btn btn-ghost" type="button">
+                Create account
+              </button>
+            </div>
+
+            <div class="stack" style="margin-top: var(--space-4);">
+              <label id="display-name-wrap" hidden for="display-name">
+                Name
+                <input
+                  id="display-name"
+                  type="text"
+                  autocomplete="name"
+                  placeholder="David"
+                />
               </label>
 
-              <div class="actions">
-                <button id="change-password" class="btn btn-blue" type="button">Change password</button>
+              <label for="email">
+                Email
+                <input id="email" type="email" autocomplete="email" />
+              </label>
+
+              <label for="password">
+                Password
+                <input id="password" type="password" autocomplete="current-password" />
+              </label>
+
+              <label id="confirm-password-wrap" hidden for="confirm-password">
+                Confirm password
+                <input id="confirm-password" type="password" autocomplete="new-password" />
+              </label>
+
+              <p id="profile-status" class="status">
+                Enter your email and password to continue.
+              </p>
+
+              <div class="button-row single-action">
+                <button id="sign-in" class="btn btn-blue" type="button">
+                  Log in
+                </button>
+                <button id="sign-up" class="btn btn-green" type="button" hidden disabled>
+                  Create account
+                </button>
               </div>
+            </div>
+          </article>
+
+          <article class="card" data-signed-in-only hidden>
+            <div class="section-title">
+              <h2>Change password</h2>
+            </div>
+
+            <div class="stack">
+              <label for="new-password">
+                New password
+                <input id="new-password" type="password" autocomplete="new-password" />
+              </label>
 
               <p id="password-status" class="status"></p>
-            </div>
 
-            <div class="section-divider"></div>
-
-            <div class="actions">
-              <button id="sign-out" class="btn btn-red" type="button">Log out</button>
+              <div class="button-row single-action">
+                <button id="change-password" class="btn btn-primary" type="button">
+                  Update password
+                </button>
+              </div>
             </div>
-          </div>
+          </article>
         </section>
       </main>
     </div>
 
-    <div id="sticky-submit-bar" class="sticky-submit-bar" hidden>
+    <div id="sticky-submit-bar" class="sticky-submit-bar hidden">
       <div class="sticky-submit-inner">
-        <div id="sticky-save-state" class="sticky-save-state">Sign in to start.</div>
-        <button id="sticky-submit-btn" class="btn btn-green" type="button">Submit all picks</button>
+        <p id="sticky-save-state" class="sticky-save-state">
+          Sign in to start.
+        </p>
+        <button id="sticky-submit-btn" class="btn btn-green" type="button">
+          Submit all picks for this event
+        </button>
       </div>
     </div>
 
@@ -244,113 +208,8 @@
       <div class="bottom-nav-grid">
         <button id="tab-event" class="tab-btn active" type="button">Event</button>
         <button id="tab-leaderboard" class="tab-btn" type="button">Leaderboard</button>
-        <button id="tab-profile" class="tab-btn" type="button">Profile</button>
+        <button id="tab-profile" class="tab-btn" type="button">Account</button>
       </div>
     </nav>
-
-    <div id="scoring-modal" class="modal hidden" aria-hidden="true">
-      <div id="scoring-modal-backdrop" class="modal-backdrop"></div>
-      <div
-        class="modal-panel"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="scoring-modal-title"
-        aria-describedby="scoring-modal-description"
-      >
-        <div class="modal-header">
-          <div>
-            <p class="modal-eyebrow">Scoring</p>
-            <h2 id="scoring-modal-title">How leaderboard scoring works</h2>
-          </div>
-          <button
-            id="scoring-modal-close"
-            class="icon-btn"
-            type="button"
-            aria-label="Close scoring explanation"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M18 6L6 18"></path>
-              <path d="M6 6L18 18"></path>
-            </svg>
-          </button>
-        </div>
-
-        <div class="modal-body">
-          <p id="scoring-modal-description" class="subtle">
-            Latest event rows show the event total first, followed by the scoring breakdown in brackets.
-          </p>
-
-          <div class="score-example-card">
-            <div class="score-example-line">14 (5+2+3+0+4)</div>
-            <p class="subtle">Base score only, no extra bonuses.</p>
-          </div>
-
-          <div class="score-example-card">
-            <div class="score-example-line">16 (5+2+3+0+4) +(2)</div>
-            <p class="subtle">Base score plus highest score bonus.</p>
-          </div>
-
-          <div class="score-example-card">
-            <div class="score-example-line">26 (5+2+3+0+4) +(2+10)</div>
-            <p class="subtle">Base score plus highest score bonus and flush bonus.</p>
-          </div>
-
-          <div class="score-example-card">
-            <div class="score-example-line">36 (5+2+3+0+4) +(2+10+10)</div>
-            <p class="subtle">Base score plus highest score bonus, flush bonus, and royal flush bonus.</p>
-          </div>
-
-          <div class="scoring-list">
-            <div class="scoring-row">
-              <span>Base score</span>
-              <span>The values inside the first brackets, for example (5+2+3+0+4).</span>
-            </div>
-            <div class="scoring-row">
-              <span>Highest score bonus</span>
-              <span>A bonus added when a player has the top score for the event.</span>
-            </div>
-            <div class="scoring-row">
-              <span>Flush bonus</span>
-              <span>An extra bonus added when the flush condition is achieved.</span>
-            </div>
-            <div class="scoring-row">
-              <span>Royal flush bonus</span>
-              <span>An extra bonus added on top when the royal flush condition is achieved.</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <script>
-      (function () {
-        const toggle = document.querySelector("[data-theme-toggle]");
-        const root = document.documentElement;
-        let theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-
-        function renderIcon() {
-          if (!toggle) return;
-          toggle.setAttribute("aria-label", `Switch to ${theme === "dark" ? "light" : "dark"} mode`);
-          toggle.innerHTML =
-            theme === "dark"
-              ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="5"></circle><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path></svg>'
-              : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>';
-        }
-
-        root.setAttribute("data-theme", theme);
-        renderIcon();
-
-        if (toggle) {
-          toggle.addEventListener("click", () => {
-            theme = theme === "dark" ? "light" : "dark";
-            root.setAttribute("data-theme", theme);
-            renderIcon();
-          });
-        }
-      })();
-    </script>
-
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./app.js"></script>
   </body>
 </html>
