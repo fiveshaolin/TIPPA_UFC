@@ -52,6 +52,7 @@ const profileDisplayNameInput = document.getElementById("profile-display-name");
 const saveDisplayNameBtn = document.getElementById("save-display-name");
 
 const submitAllBtn = document.getElementById("submit-all");
+
 const eventBox = document.getElementById("event-box");
 const countdownBox = document.getElementById("countdown-box");
 const eventBadge = document.getElementById("event-badge");
@@ -109,7 +110,7 @@ function resetSignedOutUI() {
   if (fightsBox) fightsBox.innerHTML = '<div class="empty-state">No data yet.</div>';
   if (othersPicksBox) othersPicksBox.innerHTML = "Nothing to show yet.";
   if (othersStatus) othersStatus.textContent = "Hidden until everyone has submitted.";
-  if (leaderboardBox) leaderboardBox.innerHTML = '<div class="card">No data yet.</div>';
+  if (leaderboardBox) leaderboardBox.innerHTML = '<div class="card empty-state">No data yet.</div>';
 
   clearAuthInputs();
   if (profileDisplayNameInput) profileDisplayNameInput.value = "";
@@ -117,10 +118,25 @@ function resetSignedOutUI() {
 
   setAuthMode("login");
   setStatus(authStatus, "Not signed in.");
+  setStatus(profileStatus, "Enter your email and password to continue.");
   setStatus(passwordStatus, "");
   updateAuthPanels();
   updateStickyBar();
   switchView("profile");
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function toNumber(value, fallback = 0) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
 }
 
 function getDisplayName(userId) {
@@ -195,19 +211,23 @@ function setAuthMode(mode) {
   if (signInBtn) signInBtn.hidden = authMode !== "login";
   if (signUpBtn) signUpBtn.hidden = authMode !== "create";
 
+  if (authModeLoginBtn) {
+    authModeLoginBtn.classList.toggle("active", authMode === "login");
+    authModeLoginBtn.setAttribute("aria-selected", authMode === "login" ? "true" : "false");
+  }
+
+  if (authModeCreateBtn) {
+    authModeCreateBtn.classList.toggle("active", authMode === "create");
+    authModeCreateBtn.setAttribute("aria-selected", authMode === "create" ? "true" : "false");
+  }
+
   if (passwordInput) {
-    passwordInput.setAttribute(
-      "autocomplete",
-      authMode === "create" ? "new-password" : "current-password"
-    );
+    passwordInput.setAttribute("autocomplete", authMode === "create" ? "new-password" : "current-password");
   }
 
   if (confirmPasswordInput) {
     confirmPasswordInput.setAttribute("autocomplete", "new-password");
   }
-
-  if (authModeLoginBtn) authModeLoginBtn.classList.toggle("active", authMode === "login");
-  if (authModeCreateBtn) authModeCreateBtn.classList.toggle("active", authMode === "create");
 
   updateCreateAccountButtonState();
 }
@@ -219,7 +239,9 @@ function updateCreateAccountButtonState() {
     return;
   }
   signUpBtn.disabled = !isCreateModeValid();
-  setStatus(profileStatus, getCreateModeMessage());
+  if (!currentSession) {
+    setStatus(profileStatus, getCreateModeMessage());
+  }
 }
 
 function clearAuthInputs() {
@@ -252,7 +274,6 @@ function updateAuthPanels() {
   signedOutOnly.forEach((el) => {
     el.hidden = loggedIn;
   });
-
   signedInOnly.forEach((el) => {
     el.hidden = !loggedIn;
   });
@@ -264,11 +285,6 @@ function updateAuthPanels() {
   }
 
   setStatus(authStatus, loggedIn ? `Signed in as ${currentSession.user.email}` : "Not signed in.");
-  setStatus(
-    profileStatus,
-    loggedIn ? "" : authMode === "create" ? getCreateModeMessage() : "Enter your email and password to continue."
-  );
-
   updateProfileEditor();
 }
 
@@ -278,81 +294,8 @@ function initAuthModeControls() {
   if (displayNameInput) displayNameInput.addEventListener("input", updateCreateAccountButtonState);
   if (passwordInput) passwordInput.addEventListener("input", updateCreateAccountButtonState);
   if (confirmPasswordInput) confirmPasswordInput.addEventListener("input", updateCreateAccountButtonState);
-  if (emailInput) {
-    emailInput.addEventListener("input", () => {
-      if (!currentSession) updateCreateAccountButtonState();
-    });
-  }
+  if (emailInput) emailInput.addEventListener("input", updateCreateAccountButtonState);
   setAuthMode("login");
-}
-
-function getDraftFromInputs(fightId) {
-  const winnerEl = document.querySelector(`[data-fight-id="${fightId}"][data-field="picked_winner"]`);
-  const methodEl = document.querySelector(`[data-fight-id="${fightId}"][data-field="method"]`);
-  const roundEl = document.querySelector(`[data-fight-id="${fightId}"][data-field="round_number"]`);
-  const decisionEl = document.querySelector(`[data-fight-id="${fightId}"][data-field="decision_type"]`);
-  const method = methodEl ? methodEl.value : "";
-
-  return {
-    picked_winner: winnerEl ? winnerEl.value : "",
-    method,
-    round_number: method === "ko_tko" || method === "sub" ? (roundEl ? roundEl.value : "") : "",
-    decision_type: method === "decision" ? (decisionEl ? decisionEl.value : "") : ""
-  };
-}
-
-function isFightDraftComplete(draft) {
-  if (!draft || !draft.picked_winner || !draft.method) return false;
-  if ((draft.method === "ko_tko" || draft.method === "sub") && !draft.round_number) return false;
-  if (draft.method === "decision" && !draft.decision_type) return false;
-  return true;
-}
-
-function areAllDraftsComplete() {
-  return currentFights.length > 0 && currentFights.every((fight) => isFightDraftComplete(pickDrafts[fight.id]));
-}
-
-function isAnyDraftSaving() {
-  return Object.values(saveStateByFight).some((value) => value === "Saving...");
-}
-
-function hasAnyDraftError() {
-  return Object.values(saveStateByFight).some((value) => String(value || "").startsWith("Error"));
-}
-
-function getStickyStateMessage() {
-  if (!currentSession || !currentGroup || !currentEvent) return "Sign in to start.";
-  if (isSubmittedForCurrentEvent) return "Your picks are submitted and locked.";
-  if (hasLockTimePassed()) return "This event is locked.";
-  if (isAnyDraftSaving()) return "Saving picks...";
-  if (hasAnyDraftError()) return "Some picks could not be saved.";
-  if (!areAllDraftsComplete()) return "Complete all picks to submit.";
-  return "All picks saved.";
-}
-
-function updateSubmitButtonState() {
-  const lockReached = hasLockTimePassed();
-  const disabled =
-    isSubmittedForCurrentEvent ||
-    lockReached ||
-    isAnyDraftSaving() ||
-    hasAnyDraftError() ||
-    !areAllDraftsComplete();
-
-  if (submitAllBtn) submitAllBtn.disabled = disabled;
-  if (stickySubmitBtn) stickySubmitBtn.disabled = disabled;
-  if (stickySaveState) stickySaveState.textContent = getStickyStateMessage();
-}
-
-function updateStickyBar() {
-  if (!stickyBar) return;
-  stickyBar.hidden = currentView !== "event" || !currentSession || !currentEvent;
-  updateSubmitButtonState();
-}
-
-function formatEventName(event) {
-  if (!event) return "No event found.";
-  return event.name || "Unnamed event";
 }
 
 function hasLockTimePassed() {
@@ -416,6 +359,75 @@ function startCountdownTimer() {
   clearCountdownTimer();
   updateCountdown();
   countdownTimer = setInterval(updateCountdown, 1000);
+}
+
+function getStickyStateMessage() {
+  if (!currentSession || !currentGroup || !currentEvent) return "Sign in to start.";
+  if (isSubmittedForCurrentEvent) return "Your picks are submitted and locked.";
+  if (hasLockTimePassed()) return "This event is locked.";
+  if (isAnyDraftSaving()) return "Saving picks...";
+  if (hasAnyDraftError()) return "Some picks could not be saved.";
+  if (!areAllDraftsComplete()) return "Complete all picks to submit.";
+  return "All picks saved.";
+}
+
+function updateSubmitButtonState() {
+  const lockReached = hasLockTimePassed();
+  const disabled =
+    isSubmittedForCurrentEvent ||
+    lockReached ||
+    isAnyDraftSaving() ||
+    hasAnyDraftError() ||
+    !areAllDraftsComplete();
+
+  if (submitAllBtn) submitAllBtn.disabled = disabled;
+  if (stickySubmitBtn) stickySubmitBtn.disabled = disabled;
+  if (stickySaveState) stickySaveState.textContent = getStickyStateMessage();
+}
+
+function updateStickyBar() {
+  if (!stickyBar) return;
+  stickyBar.hidden = currentView !== "event" || !currentSession || !currentEvent;
+  updateSubmitButtonState();
+}
+
+function formatEventName(event) {
+  if (!event) return "No event found.";
+  return event.name || "Unnamed event";
+}
+
+function getDraftFromInputs(fightId) {
+  const winnerEl = document.querySelector(`[data-fight-id="${fightId}"][data-field="picked_winner"]`);
+  const methodEl = document.querySelector(`[data-fight-id="${fightId}"][data-field="method"]`);
+  const roundEl = document.querySelector(`[data-fight-id="${fightId}"][data-field="round_number"]`);
+  const decisionEl = document.querySelector(`[data-fight-id="${fightId}"][data-field="decision_type"]`);
+  const method = methodEl ? methodEl.value : "";
+
+  return {
+    picked_winner: winnerEl ? winnerEl.value : "",
+    method,
+    round_number: method === "ko_tko" || method === "sub" ? (roundEl ? roundEl.value : "") : "",
+    decision_type: method === "decision" ? (decisionEl ? decisionEl.value : "") : ""
+  };
+}
+
+function isFightDraftComplete(draft) {
+  if (!draft || !draft.picked_winner || !draft.method) return false;
+  if ((draft.method === "ko_tko" || draft.method === "sub") && !draft.round_number) return false;
+  if (draft.method === "decision" && !draft.decision_type) return false;
+  return true;
+}
+
+function areAllDraftsComplete() {
+  return currentFights.length > 0 && currentFights.every((fight) => isFightDraftComplete(pickDrafts[fight.id]));
+}
+
+function isAnyDraftSaving() {
+  return Object.values(saveStateByFight).some((value) => value === "Saving...");
+}
+
+function hasAnyDraftError() {
+  return Object.values(saveStateByFight).some((value) => String(value || "").startsWith("Error"));
 }
 
 function renderPickForm(fight, existingPick) {
@@ -717,12 +729,12 @@ async function loadSubmittedPicks() {
     grouped[userId].forEach((pick) => {
       const fight = currentFights.find((f) => f.id === pick.fight_id);
       const fightLabel = fight ? `${fight.fighter_a} vs ${fight.fighter_b}` : pick.fight_id;
-      picksHtml += `<li>${fightLabel}: <strong>${pick.picked_winner}</strong> via ${describePick(pick)}</li>`;
+      picksHtml += `<li>${escapeHtml(fightLabel)}: <strong>${escapeHtml(pick.picked_winner)}</strong> via ${escapeHtml(describePick(pick))}</li>`;
     });
 
     html += `
       <section class="card submitted-picks-card">
-        <strong>${getDisplayName(userId)}</strong>
+        <strong>${escapeHtml(getDisplayName(userId))}</strong>
         <ul>${picksHtml}</ul>
       </section>
     `;
@@ -730,6 +742,119 @@ async function loadSubmittedPicks() {
 
   othersStatus.textContent = "All submitted picks are now visible.";
   othersPicksBox.innerHTML = html;
+}
+
+function getLatestEventScoreParts(row) {
+  const possibleArrays = [
+    row.last_event_base_parts,
+    row.latest_event_base_parts,
+    row.base_parts,
+    row.breakdown_parts
+  ];
+  for (const arr of possibleArrays) {
+    if (Array.isArray(arr) && arr.length) {
+      return arr.map((v) => toNumber(v));
+    }
+  }
+
+  const rawParts = [
+    row.last_event_correct_points,
+    row.last_event_method_points,
+    row.last_event_round_points,
+    row.last_event_prop_points,
+    row.last_event_bonus_base_points
+  ];
+  return rawParts
+    .filter((v) => v !== undefined && v !== null)
+    .map((v) => toNumber(v));
+}
+
+function getLatestEventBonusParts(row) {
+  const highestScoreBonus = toNumber(
+    row.last_event_highest_score_bonus ??
+      row.highest_score_bonus ??
+      row.latest_event_highest_score_bonus ??
+      0
+  );
+  const flushBonus = toNumber(
+    row.last_event_flush_bonus ??
+      row.flush_bonus ??
+      row.latest_event_flush_bonus ??
+      0
+  );
+  const royalFlushBonus = toNumber(
+    row.last_event_royal_flush_bonus ??
+      row.royal_flush_bonus ??
+      row.latest_event_royal_flush_bonus ??
+      0
+  );
+
+  return [highestScoreBonus, flushBonus, royalFlushBonus].filter((v) => v > 0);
+}
+
+function getLatestEventTotal(row) {
+  const explicitTotal =
+    row.last_event_total ??
+    row.latest_event_total ??
+    row.event_points_last ??
+    row.last_event_points;
+
+  if (explicitTotal !== undefined && explicitTotal !== null && explicitTotal !== "") {
+    return toNumber(explicitTotal);
+  }
+
+  const baseSum = getLatestEventScoreParts(row).reduce((sum, v) => sum + v, 0);
+  const bonusSum = getLatestEventBonusParts(row).reduce((sum, v) => sum + v, 0);
+  return baseSum + bonusSum;
+}
+
+function formatBaseBreakdown(row) {
+  const parts = getLatestEventScoreParts(row);
+  if (!parts.length) return "";
+  return `(${parts.join("+")})`;
+}
+
+function formatBonusBreakdown(row) {
+  const bonusParts = getLatestEventBonusParts(row);
+  if (!bonusParts.length) return "";
+  return `+(${bonusParts.join("+")})`;
+}
+
+function formatLatestEventBreakdown(row) {
+  const total = getLatestEventTotal(row);
+  const base = formatBaseBreakdown(row);
+  const bonus = formatBonusBreakdown(row);
+
+  if (!base && !bonus) return "No latest event breakdown yet.";
+  return `${total} ${[base, bonus].filter(Boolean).join(" ")}`.trim();
+}
+
+function getLatestEventBonusLabels(row) {
+  const labels = [];
+
+  const highestScoreBonus = toNumber(
+    row.last_event_highest_score_bonus ??
+      row.highest_score_bonus ??
+      row.latest_event_highest_score_bonus ??
+      0
+  );
+  const flushBonus = toNumber(
+    row.last_event_flush_bonus ??
+      row.flush_bonus ??
+      row.latest_event_flush_bonus ??
+      0
+  );
+  const royalFlushBonus = toNumber(
+    row.last_event_royal_flush_bonus ??
+      row.royal_flush_bonus ??
+      row.latest_event_royal_flush_bonus ??
+      0
+  );
+
+  if (highestScoreBonus > 0) labels.push(`Highest score bonus +${highestScoreBonus}`);
+  if (flushBonus > 0) labels.push(`Flush bonus +${flushBonus}`);
+  if (royalFlushBonus > 0) labels.push(`Royal flush bonus +${royFlushBonus}`);
+  return labels;
 }
 
 function renderLeaderboard() {
@@ -744,21 +869,39 @@ function renderLeaderboard() {
     .map((row, index) => {
       const name = row.display_name || getDisplayName(row.user_id);
       const rank = row.rank ?? index + 1;
-      const openingPoints = row.opening_points ?? 0;
-      const appPoints = row.app_points ?? 0;
-      const currentPoints = row.current_points ?? 0;
-      const seasonYear = row.season_year ?? "";
+      const currentPoints = row.current_points ?? row.total_points ?? row.totalpoints ?? 0;
+
+      const lastEventTotal = getLatestEventTotal(row);
+      const latestEventBreakdown = formatLatestEventBreakdown(row);
+      const bonusLabels = getLatestEventBonusLabels(row);
+      const eventLabel = row.last_event_name || (currentEvent && currentEvent.name) || "Latest event";
 
       return `
         <details class="card leaderboard-card">
           <summary>
-            <div>
-              <div class="leaderboard-rank">${rank}. ${name}</div>
-              <div class="leaderboard-subline">Opening: ${openingPoints} Â· App: ${appPoints}</div>
+            <div class="leaderboard-main">
+              <div class="leaderboard-rank">${escapeHtml(rank)}. ${escapeHtml(name)}</div>
+              <div class="leaderboard-subline">Last event: ${escapeHtml(lastEventTotal)}</div>
             </div>
-            <div class="leaderboard-total">${currentPoints}</div>
+            <div class="leaderboard-total">${escapeHtml(currentPoints)}</div>
           </summary>
-          <div class="leaderboard-breakdown">Season ${seasonYear} Â· Current total: ${currentPoints}</div>
+          <div class="leaderboard-breakdown">
+            <div class="leaderboard-detail-row">
+              <span class="leaderboard-detail-label">Total points</span>
+              <strong>${escapeHtml(currentPoints)}</strong>
+            </div>
+            <div class="leaderboard-detail-row">
+              <span class="leaderboard-detail-label">${escapeHtml(eventLabel)}</span>
+              <strong>${escapeHtml(latestEventBreakdown)}</strong>
+            </div>
+            ${
+              bonusLabels.length
+                ? `<div class="leaderboard-bonuses">${bonusLabels
+                    .map((label) => `<span class="leaderboard-bonus-pill">${escapeHtml(label)}</span>`)
+                    .join("")}</div>`
+                : ""
+            }
+          </div>
         </details>
       `;
     })
@@ -774,9 +917,8 @@ async function loadLeaderboard() {
 
   let query = supabaseClient
     .from("leaderboard")
-    .select("season_year, group_id, user_id, display_name, opening_points, app_points, current_points, rank")
-    .eq("group_id", currentGroup.id)
-    .order("rank", { ascending: true });
+    .select("*")
+    .eq("group_id", currentGroup.id);
 
   if (currentEvent && currentEvent.event_date) {
     const seasonYear = new Date(currentEvent.event_date).getUTCFullYear();
@@ -785,12 +927,20 @@ async function loadLeaderboard() {
     }
   }
 
-  const scoresResult = await query;
+  let scoresResult = await query.order("rank", { ascending: true });
+
+  if (scoresResult.error) {
+    scoresResult = await supabaseClient
+      .from("leaderboard")
+      .select("*")
+      .eq("group_id", currentGroup.id)
+      .order("current_points", { ascending: false });
+  }
 
   if (scoresResult.error) {
     console.error(scoresResult.error);
     currentLeaderboard = [];
-    leaderboardBox.innerHTML = `<div class="card empty-state">Error loading leaderboard: ${scoresResult.error.message}</div>`;
+    leaderboardBox.innerHTML = `<div class="card empty-state">Error loading leaderboard: ${escapeHtml(scoresResult.error.message)}</div>`;
     return;
   }
 
@@ -1352,8 +1502,8 @@ if (saveDisplayNameBtn) {
   saveDisplayNameBtn.addEventListener("click", saveDisplayName);
 }
 
-if (submitAllBtn) submitAllBtn.addEventListener("click", submitAllPicks);
 if (stickySubmitBtn) stickySubmitBtn.addEventListener("click", submitAllPicks);
+if (submitAllBtn) submitAllBtn.addEventListener("click", submitAllPicks);
 if (changePasswordBtn) changePasswordBtn.addEventListener("click", changePassword);
 
 document.addEventListener("DOMContentLoaded", () => {
