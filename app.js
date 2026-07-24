@@ -51,7 +51,6 @@ const passwordStatus = document.getElementById("password-status");
 const profileDisplayNameInput = document.getElementById("profile-display-name");
 const saveDisplayNameBtn = document.getElementById("save-display-name");
 
-const submitAllBtn = document.getElementById("submit-all");
 const eventBox = document.getElementById("event-box");
 const countdownBox = document.getElementById("countdown-box");
 const eventBadge = document.getElementById("event-badge");
@@ -121,6 +120,20 @@ function resetSignedOutUI() {
   updateAuthPanels();
   updateStickyBar();
   switchView("profile");
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function toNumber(value, fallback = 0) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
 }
 
 function getDisplayName(userId) {
@@ -339,7 +352,6 @@ function updateSubmitButtonState() {
     hasAnyDraftError() ||
     !areAllDraftsComplete();
 
-  if (submitAllBtn) submitAllBtn.disabled = disabled;
   if (stickySubmitBtn) stickySubmitBtn.disabled = disabled;
   if (stickySaveState) stickySaveState.textContent = getStickyStateMessage();
 }
@@ -717,12 +729,12 @@ async function loadSubmittedPicks() {
     grouped[userId].forEach((pick) => {
       const fight = currentFights.find((f) => f.id === pick.fight_id);
       const fightLabel = fight ? `${fight.fighter_a} vs ${fight.fighter_b}` : pick.fight_id;
-      picksHtml += `<li>${fightLabel}: <strong>${pick.picked_winner}</strong> via ${describePick(pick)}</li>`;
+      picksHtml += `<li>${escapeHtml(fightLabel)}: <strong>${escapeHtml(pick.picked_winner)}</strong> via ${escapeHtml(describePick(pick))}</li>`;
     });
 
     html += `
       <section class="card submitted-picks-card">
-        <strong>${getDisplayName(userId)}</strong>
+        <strong>${escapeHtml(getDisplayName(userId))}</strong>
         <ul>${picksHtml}</ul>
       </section>
     `;
@@ -730,6 +742,119 @@ async function loadSubmittedPicks() {
 
   othersStatus.textContent = "All submitted picks are now visible.";
   othersPicksBox.innerHTML = html;
+}
+
+function getLatestEventScoreParts(row) {
+  const possibleBaseArrays = [
+    row.last_event_base_parts,
+    row.latest_event_base_parts,
+    row.base_parts,
+    row.breakdown_parts
+  ];
+
+  for (const candidate of possibleBaseArrays) {
+    if (Array.isArray(candidate) && candidate.length) {
+      return candidate.map((value) => toNumber(value));
+    }
+  }
+
+  const fallback = [
+    row.last_event_correct_points,
+    row.last_event_method_points,
+    row.last_event_round_points,
+    row.last_event_prop_points,
+    row.last_event_bonus_base_points
+  ]
+    .filter((value) => value !== undefined && value !== null)
+    .map((value) => toNumber(value));
+
+  return fallback;
+}
+
+function getLatestEventBonusParts(row) {
+  const highestScoreBonus = toNumber(
+    row.last_event_highest_score_bonus ??
+      row.highest_score_bonus ??
+      row.latest_event_highest_score_bonus ??
+      0
+  );
+
+  const flushBonus = toNumber(
+    row.last_event_flush_bonus ??
+      row.flush_bonus ??
+      row.latest_event_flush_bonus ??
+      0
+  );
+
+  const royalFlushBonus = toNumber(
+    row.last_event_royal_flush_bonus ??
+      row.royal_flush_bonus ??
+      row.latest_event_royal_flush_bonus ??
+      0
+  );
+
+  return [highestScoreBonus, flushBonus, royalFlushBonus].filter((value) => value > 0);
+}
+
+function getLatestEventTotal(row) {
+  const explicitTotal = row.last_event_total ?? row.latest_event_total ?? row.event_points_last ?? row.last_event_points;
+  if (explicitTotal !== undefined && explicitTotal !== null && explicitTotal !== "") {
+    return toNumber(explicitTotal);
+  }
+
+  const baseSum = getLatestEventScoreParts(row).reduce((sum, value) => sum + toNumber(value), 0);
+  const bonusSum = getLatestEventBonusParts(row).reduce((sum, value) => sum + toNumber(value), 0);
+  return baseSum + bonusSum;
+}
+
+function formatBaseBreakdown(row) {
+  const parts = getLatestEventScoreParts(row);
+  if (!parts.length) return "";
+  return `(${parts.join("+")})`;
+}
+
+function formatBonusBreakdown(row) {
+  const bonusParts = getLatestEventBonusParts(row);
+  if (!bonusParts.length) return "";
+  return `+(${bonusParts.join("+")})`;
+}
+
+function formatLatestEventBreakdown(row) {
+  const total = getLatestEventTotal(row);
+  const base = formatBaseBreakdown(row);
+  const bonus = formatBonusBreakdown(row);
+
+  if (!base && !bonus) return "No latest event breakdown yet.";
+  return `${total} ${[base, bonus].filter(Boolean).join(" ")}`.trim();
+}
+
+function getLatestEventBonusLabels(row) {
+  const labels = [];
+
+  const highestScoreBonus = toNumber(
+    row.last_event_highest_score_bonus ??
+      row.highest_score_bonus ??
+      row.latest_event_highest_score_bonus ??
+      0
+  );
+  const flushBonus = toNumber(
+    row.last_event_flush_bonus ??
+      row.flush_bonus ??
+      row.latest_event_flush_bonus ??
+      0
+  );
+  const royalFlushBonus = toNumber(
+    row.last_event_royal_flush_bonus ??
+      row.royal_flush_bonus ??
+      row.latest_event_royal_flush_bonus ??
+      0
+  );
+
+  if (highestScoreBonus > 0) labels.push(`Highest score bonus +${highestScoreBonus}`);
+  if (flushBonus > 0) labels.push(`Flush bonus +${flushBonus}`);
+  if (royalFlushBonus > 0) labels.push(`Royal flush bonus +${royalFlushBonus}`);
+
+  return labels;
 }
 
 function renderLeaderboard() {
@@ -744,21 +869,38 @@ function renderLeaderboard() {
     .map((row, index) => {
       const name = row.display_name || getDisplayName(row.user_id);
       const rank = row.rank ?? index + 1;
-      const openingPoints = row.opening_points ?? 0;
-      const appPoints = row.app_points ?? 0;
-      const currentPoints = row.current_points ?? 0;
-      const seasonYear = row.season_year ?? "";
+      const currentPoints = row.current_points ?? row.total_points ?? row.totalpoints ?? 0;
+      const lastEventTotal = getLatestEventTotal(row);
+      const latestEventBreakdown = formatLatestEventBreakdown(row);
+      const bonusLabels = getLatestEventBonusLabels(row);
+      const eventLabel = row.last_event_name || currentEvent?.name || "Latest event";
 
       return `
         <details class="card leaderboard-card">
           <summary>
-            <div>
-              <div class="leaderboard-rank">${rank}. ${name}</div>
-              <div class="leaderboard-subline">Opening: ${openingPoints} · App: ${appPoints}</div>
+            <div class="leaderboard-main">
+              <div class="leaderboard-rank">${escapeHtml(rank)}. ${escapeHtml(name)}</div>
+              <div class="leaderboard-subline">Last event: ${escapeHtml(lastEventTotal)}</div>
             </div>
-            <div class="leaderboard-total">${currentPoints}</div>
+            <div class="leaderboard-total">${escapeHtml(currentPoints)}</div>
           </summary>
-          <div class="leaderboard-breakdown">Season ${seasonYear} · Current total: ${currentPoints}</div>
+          <div class="leaderboard-breakdown">
+            <div class="leaderboard-detail-row">
+              <span class="leaderboard-detail-label">Total points</span>
+              <strong>${escapeHtml(currentPoints)}</strong>
+            </div>
+            <div class="leaderboard-detail-row">
+              <span class="leaderboard-detail-label">${escapeHtml(eventLabel)}</span>
+              <strong>${escapeHtml(latestEventBreakdown)}</strong>
+            </div>
+            ${
+              bonusLabels.length
+                ? `<div class="leaderboard-bonuses">${bonusLabels
+                    .map((label) => `<span class="leaderboard-bonus-pill">${escapeHtml(label)}</span>`)
+                    .join("")}</div>`
+                : ""
+            }
+          </div>
         </details>
       `;
     })
@@ -774,9 +916,8 @@ async function loadLeaderboard() {
 
   let query = supabaseClient
     .from("leaderboard")
-    .select("season_year, group_id, user_id, display_name, opening_points, app_points, current_points, rank")
-    .eq("group_id", currentGroup.id)
-    .order("rank", { ascending: true });
+    .select("*")
+    .eq("group_id", currentGroup.id);
 
   if (currentEvent && currentEvent.event_date) {
     const seasonYear = new Date(currentEvent.event_date).getUTCFullYear();
@@ -785,12 +926,12 @@ async function loadLeaderboard() {
     }
   }
 
-  const scoresResult = await query;
+  const scoresResult = await query.order("rank", { ascending: true });
 
   if (scoresResult.error) {
     console.error(scoresResult.error);
     currentLeaderboard = [];
-    leaderboardBox.innerHTML = `<div class="card empty-state">Error loading leaderboard: ${scoresResult.error.message}</div>`;
+    leaderboardBox.innerHTML = `<div class="card empty-state">Error loading leaderboard: ${escapeHtml(scoresResult.error.message)}</div>`;
     return;
   }
 
@@ -1352,7 +1493,6 @@ if (saveDisplayNameBtn) {
   saveDisplayNameBtn.addEventListener("click", saveDisplayName);
 }
 
-if (submitAllBtn) submitAllBtn.addEventListener("click", submitAllPicks);
 if (stickySubmitBtn) stickySubmitBtn.addEventListener("click", submitAllPicks);
 if (changePasswordBtn) changePasswordBtn.addEventListener("click", changePassword);
 
