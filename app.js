@@ -23,6 +23,9 @@ const emailInput = document.getElementById("email");
 const passwordInput = document.getElementById("password");
 const confirmPasswordInput = document.getElementById("confirm-password");
 const confirmPasswordWrap = document.getElementById("confirm-password-wrap");
+const displayNameInput = document.getElementById("display-name");
+const displayNameWrap = document.getElementById("display-name-wrap");
+
 const authTitle = document.getElementById("auth-title");
 const authIntro = document.getElementById("auth-intro");
 const authModeLoginBtn = document.getElementById("auth-mode-login");
@@ -42,6 +45,9 @@ const signedInOnly = document.querySelectorAll("[data-signed-in-only]");
 const newPasswordInput = document.getElementById("new-password");
 const changePasswordBtn = document.getElementById("change-password");
 const passwordStatus = document.getElementById("password-status");
+
+const profileDisplayNameInput = document.getElementById("profile-display-name");
+const saveDisplayNameBtn = document.getElementById("save-display-name");
 
 const submitAllBtn = document.getElementById("submit-all");
 const eventBox = document.getElementById("event-box");
@@ -68,12 +74,34 @@ function setStatus(el, message) {
   if (message) console.log(message);
 }
 
+function resetAppState() {
+  currentSession = null;
+  currentGroup = null;
+  currentEvent = null;
+  currentFights = [];
+  currentOwnPicks = [];
+  currentRevealOpen = false;
+  currentProfiles = [];
+  currentLeaderboard = [];
+  pickDrafts = {};
+  saveTimers = {};
+  saveStateByFight = {};
+  isSubmittedForCurrentEvent = false;
+
+  if (countdownTimer) {
+    clearInterval(countdownTimer);
+    countdownTimer = null;
+  }
+}
+
 function getDisplayName(userId) {
   const profile = currentProfiles.find((p) => p.id === userId);
   if (profile && profile.display_name && profile.display_name.trim()) {
     return profile.display_name.trim();
   }
   if (currentSession && currentSession.user && currentSession.user.id === userId) {
+    const ownProfileName = profileDisplayNameInput ? profileDisplayNameInput.value.trim() : "";
+    if (ownProfileName) return ownProfileName;
     return currentSession.user.email;
   }
   return userId;
@@ -100,23 +128,26 @@ function initTabs() {
 }
 
 function isCreateModeValid() {
+  const displayName = displayNameInput ? displayNameInput.value.trim() : "";
   const email = emailInput ? emailInput.value.trim() : "";
   const password = passwordInput ? passwordInput.value.trim() : "";
   const confirmPassword = confirmPasswordInput ? confirmPasswordInput.value.trim() : "";
-  return !!email && password.length >= 6 && confirmPassword.length >= 6 && password === confirmPassword;
+  return !!displayName && !!email && password.length >= 6 && confirmPassword.length >= 6 && password === confirmPassword;
 }
 
 function getCreateModeMessage() {
+  const displayName = displayNameInput ? displayNameInput.value.trim() : "";
   const email = emailInput ? emailInput.value.trim() : "";
   const password = passwordInput ? passwordInput.value.trim() : "";
   const confirmPassword = confirmPasswordInput ? confirmPasswordInput.value.trim() : "";
 
+  if (!displayName) return "Enter the name to show on the leaderboard.";
   if (!email) return "Enter your email address.";
   if (!password && !confirmPassword) return "Create a password and enter it twice.";
   if (password.length > 0 && password.length < 6) return "Password must be at least 6 characters.";
   if (!confirmPassword) return "Please re-enter your password.";
   if (password !== confirmPassword) return "Passwords must match.";
-  return "Passwords match. Ready to create account.";
+  return "Ready to create account.";
 }
 
 function setAuthMode(mode) {
@@ -126,10 +157,11 @@ function setAuthMode(mode) {
   if (authIntro) {
     authIntro.textContent =
       authMode === "create"
-        ? "Enter your email and password twice before creating your account."
+        ? "Enter your name, email, and password twice to create your account."
         : "Enter your email and password to sign in.";
   }
 
+  if (displayNameWrap) displayNameWrap.hidden = authMode !== "create";
   if (confirmPasswordWrap) confirmPasswordWrap.hidden = authMode !== "create";
   if (signInBtn) signInBtn.hidden = authMode !== "login";
   if (signUpBtn) signUpBtn.hidden = authMode !== "create";
@@ -151,9 +183,24 @@ function updateCreateAccountButtonState() {
 }
 
 function clearAuthInputs() {
+  if (displayNameInput) displayNameInput.value = "";
   if (emailInput) emailInput.value = "";
   if (passwordInput) passwordInput.value = "";
   if (confirmPasswordInput) confirmPasswordInput.value = "";
+}
+
+function updateProfileEditor() {
+  const loggedIn = !!(currentSession && currentSession.user);
+  if (!loggedIn) {
+    if (profileDisplayNameInput) profileDisplayNameInput.value = "";
+    if (saveDisplayNameBtn) saveDisplayNameBtn.disabled = true;
+    return;
+  }
+
+  const ownProfile = currentProfiles.find((p) => p.id === currentSession.user.id);
+  const displayName = ownProfile?.display_name || "";
+  if (profileDisplayNameInput) profileDisplayNameInput.value = displayName;
+  if (saveDisplayNameBtn) saveDisplayNameBtn.disabled = false;
 }
 
 function updateAuthPanels() {
@@ -171,7 +218,9 @@ function updateAuthPanels() {
   });
 
   if (signedInStatus) {
-    signedInStatus.textContent = loggedIn ? `Signed in as ${currentSession.user.email}` : "";
+    const ownProfile = currentProfiles.find((p) => p.id === currentSession?.user?.id);
+    const namePart = ownProfile?.display_name ? ` (${ownProfile.display_name})` : "";
+    signedInStatus.textContent = loggedIn ? `Signed in as ${currentSession.user.email}${namePart}` : "";
   }
 
   setStatus(authStatus, loggedIn ? `Signed in as ${currentSession.user.email}` : "Not signed in.");
@@ -179,11 +228,14 @@ function updateAuthPanels() {
     profileStatus,
     loggedIn ? "" : authMode === "create" ? getCreateModeMessage() : "Enter your email and password to continue."
   );
+
+  updateProfileEditor();
 }
 
 function initAuthModeControls() {
   if (authModeLoginBtn) authModeLoginBtn.addEventListener("click", () => setAuthMode("login"));
   if (authModeCreateBtn) authModeCreateBtn.addEventListener("click", () => setAuthMode("create"));
+  if (displayNameInput) displayNameInput.addEventListener("input", updateCreateAccountButtonState);
   if (passwordInput) passwordInput.addEventListener("input", updateCreateAccountButtonState);
   if (confirmPasswordInput) confirmPasswordInput.addEventListener("input", updateCreateAccountButtonState);
   if (emailInput) {
@@ -705,22 +757,13 @@ async function loadLeaderboard() {
 
 async function submitAllPicks() {
   try {
-    if (!supabaseClient || !currentSession || !currentGroup || !currentEvent) {
-      return;
-    }
-
+    if (!supabaseClient || !currentSession || !currentGroup || !currentEvent) return;
     if (isSubmittedForCurrentEvent) {
       await loadSubmissionState();
       return;
     }
-
-    if (hasLockTimePassed()) {
-      return;
-    }
-
-    if (isAnyDraftSaving() || hasAnyDraftError() || !areAllDraftsComplete()) {
-      return;
-    }
+    if (hasLockTimePassed()) return;
+    if (isAnyDraftSaving() || hasAnyDraftError() || !areAllDraftsComplete()) return;
 
     const { error } = await supabaseClient
       .from("event_submissions")
@@ -788,6 +831,68 @@ async function changePassword() {
   }
 }
 
+async function saveDisplayName() {
+  try {
+    if (!supabaseClient) {
+      setStatus(profileStatus, "Supabase is not initialized.");
+      return;
+    }
+
+    const session = await refreshSession();
+    if (!session) {
+      setStatus(profileStatus, "You must be signed in.");
+      return;
+    }
+
+    const displayName = profileDisplayNameInput ? profileDisplayNameInput.value.trim() : "";
+    if (!displayName) {
+      setStatus(profileStatus, "Enter a display name.");
+      return;
+    }
+
+    const { data: userData, error: userError } = await supabaseClient.auth.getUser();
+    if (userError) {
+      console.error(userError);
+      setStatus(profileStatus, `Error loading user: ${userError.message}`);
+      return;
+    }
+
+    const user = userData.user;
+    if (!user) {
+      setStatus(profileStatus, "You must be signed in.");
+      return;
+    }
+
+    const { error } = await supabaseClient
+      .from("profiles")
+      .upsert({
+        id: user.id,
+        display_name: displayName
+      });
+
+    if (error) {
+      console.error(error);
+      setStatus(profileStatus, `Error saving name: ${error.message}`);
+      return;
+    }
+
+    const profileIndex = currentProfiles.findIndex((p) => p.id === user.id);
+    if (profileIndex >= 0) {
+      currentProfiles[profileIndex] = { ...currentProfiles[profileIndex], display_name: displayName };
+    } else {
+      currentProfiles.push({ id: user.id, display_name: displayName });
+    }
+
+    updateAuthPanels();
+    renderLeaderboard();
+    await loadSubmittedPicks();
+    setStatus(profileStatus, "Display name updated.");
+  } catch (err) {
+    console.error(err);
+    setStatus(profileStatus, `Unexpected error: ${err.message}`);
+  }
+}
+
 async function loadCurrentGroup() {
   const membershipResult = await supabaseClient
     .from("group_members")
@@ -828,6 +933,10 @@ async function loadProfilesForCurrentGroup() {
   }
 
   const memberIds = memberIdsResult.data.map((row) => row.user_id);
+  if (currentSession?.user?.id && !memberIds.includes(currentSession.user.id)) {
+    memberIds.push(currentSession.user.id);
+  }
+
   if (!memberIds.length) {
     currentProfiles = [];
     return;
@@ -847,26 +956,51 @@ async function loadProfilesForCurrentGroup() {
   currentProfiles = profilesResult.data || [];
 }
 
+async function ensureOwnProfileExists() {
+  if (!supabaseClient || !currentSession?.user?.id) return;
+
+  const user = currentSession.user;
+  const fallbackName =
+    user.user_metadata?.display_name ||
+    user.email?.split("@")[0] ||
+    "Player";
+
+  const alreadyExists = currentProfiles.some((p) => p.id === user.id);
+  if (alreadyExists) return;
+
+  const { error } = await supabaseClient
+    .from("profiles")
+    .upsert({
+      id: user.id,
+      display_name: fallbackName
+    });
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  currentProfiles.push({
+    id: user.id,
+    display_name: fallbackName
+  });
+}
+
 async function loadAppData() {
   try {
     if (!supabaseClient) return;
 
     const session = await refreshSession();
     if (!session) {
-      currentGroup = null;
-      currentEvent = null;
-      currentFights = [];
-      currentOwnPicks = [];
-      currentProfiles = [];
-      currentLeaderboard = [];
-      pickDrafts = {};
-      saveTimers = {};
-      saveStateByFight = {};
-      isSubmittedForCurrentEvent = false;
-      currentRevealOpen = false;
+      resetAppState();
       if (eventBox) eventBox.textContent = "No event found.";
+      if (fightsBox) fightsBox.innerHTML = '<div class="empty-state">No data yet.</div>';
+      if (othersPicksBox) othersPicksBox.innerHTML = "Nothing to show yet.";
+      if (othersStatus) othersStatus.textContent = "Hidden until everyone has submitted.";
+      if (leaderboardBox) leaderboardBox.innerHTML = '<div class="card">No data yet.</div>';
       renderEventScreen();
       renderLeaderboard();
+      updateAuthPanels();
       updateStickyBar();
       switchView("profile");
       return;
@@ -879,11 +1013,14 @@ async function loadAppData() {
       if (countdownBox) countdownBox.textContent = "";
       currentLeaderboard = [];
       renderLeaderboard();
+      updateAuthPanels();
       updateStickyBar();
       return;
     }
 
     await loadProfilesForCurrentGroup();
+    await ensureOwnProfileExists();
+    updateAuthPanels();
 
     const eventsResult = await supabaseClient
       .from("events")
@@ -980,6 +1117,11 @@ function initSupabase() {
         switchView("profile");
       }
     });
+
+    supabaseClient.auth.onAuthStateChange(async () => {
+      await refreshSession();
+      await loadAppData();
+    });
   } catch (err) {
     console.error(err);
     setStatus(authStatus, `Initialization error: ${err.message}`);
@@ -1031,14 +1173,40 @@ if (signUpBtn) {
         return;
       }
 
+      const displayName = displayNameInput.value.trim();
       const email = emailInput.value.trim();
       const password = passwordInput.value.trim();
 
-      const { error } = await supabaseClient.auth.signUp({ email, password });
+      const { data, error } = await supabaseClient.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            display_name: displayName
+          }
+        }
+      });
+
       if (error) {
         console.error(error);
         setStatus(profileStatus, `Signup error: ${error.message}`);
         return;
+      }
+
+      const user = data?.user;
+      if (user) {
+        const { error: profileError } = await supabaseClient
+          .from("profiles")
+          .upsert({
+            id: user.id,
+            display_name: displayName
+          });
+
+        if (profileError) {
+          console.error(profileError);
+          setStatus(profileStatus, `Profile setup error: ${profileError.message}`);
+          return;
+        }
       }
 
       setStatus(profileStatus, "Account created.");
@@ -1097,23 +1265,7 @@ if (signOutBtn) {
         return;
       }
 
-      currentSession = null;
-      currentGroup = null;
-      currentEvent = null;
-      currentFights = [];
-      currentOwnPicks = [];
-      currentRevealOpen = false;
-      currentProfiles = [];
-      currentLeaderboard = [];
-      pickDrafts = {};
-      saveTimers = {};
-      saveStateByFight = {};
-      isSubmittedForCurrentEvent = false;
-
-      if (countdownTimer) {
-        clearInterval(countdownTimer);
-        countdownTimer = null;
-      }
+      resetAppState();
 
       if (eventBox) eventBox.textContent = "No event found.";
       if (countdownBox) countdownBox.textContent = "";
@@ -1127,6 +1279,8 @@ if (signOutBtn) {
       if (leaderboardBox) leaderboardBox.innerHTML = '<div class="card">No data yet.</div>';
 
       clearAuthInputs();
+      if (profileDisplayNameInput) profileDisplayNameInput.value = "";
+      if (newPasswordInput) newPasswordInput.value = "";
       setAuthMode("login");
       setStatus(profileStatus, "Logged out.");
       setStatus(authStatus, "");
@@ -1139,6 +1293,10 @@ if (signOutBtn) {
       setStatus(profileStatus, `Logout exception: ${err.message}`);
     }
   });
+}
+
+if (saveDisplayNameBtn) {
+  saveDisplayNameBtn.addEventListener("click", saveDisplayName);
 }
 
 if (submitAllBtn) submitAllBtn.addEventListener("click", submitAllPicks);
