@@ -53,18 +53,18 @@
             <div id="fights-box">No data yet.</div>
           </article>
 
-      <article class="card submitted-picks-card">
-  <div class="section-title">
-    <h2>Submitted picks</h2>
-    <p class="muted">
-      Once everyone has locked in, you’ll see the full card here.
-    </p>
-  </div>
-  <p id="others-status" class="status">
-    Hidden until everyone has submitted.
-  </p>
-  <div id="others-picks-box">Nothing to show yet.</div>
-</article>
+          <article class="card submitted-picks-card">
+            <div class="section-title">
+              <h2>Submitted picks</h2>
+              <p class="muted">
+                Once everyone has locked in, you’ll see the full card here.
+              </p>
+            </div>
+            <p id="others-status" class="status">
+              Hidden until everyone has submitted.
+            </p>
+            <div id="others-picks-box">Nothing to show yet.</div>
+          </article>
         </section>
 
         <section id="view-leaderboard" class="stack" hidden>
@@ -81,11 +81,30 @@
           <article class="card" id="account-card" data-signed-in-only hidden>
             <div class="section-title">
               <h2>Account</h2>
+              <p class="muted">Manage the name shown on the leaderboard.</p>
             </div>
 
             <p id="signed-in-status" class="status"></p>
 
-            <div class="button-row single-action">
+            <div class="stack" style="margin-top: var(--space-4);">
+              <label for="profile-display-name">
+                Display name
+                <input
+                  id="profile-display-name"
+                  type="text"
+                  autocomplete="nickname"
+                  placeholder="David"
+                />
+              </label>
+
+              <div class="button-row single-action">
+                <button id="save-display-name" class="btn btn-primary" type="button">
+                  Save name
+                </button>
+              </div>
+            </div>
+
+            <div class="button-row single-action" style="margin-top: var(--space-4);">
               <button id="sign-out" class="btn btn-red" type="button">
                 Log out
               </button>
@@ -110,17 +129,27 @@
             </div>
 
             <div class="stack" style="margin-top: var(--space-4);">
-              <label>
+              <label id="display-name-wrap" hidden for="display-name">
+                Name
+                <input
+                  id="display-name"
+                  type="text"
+                  autocomplete="name"
+                  placeholder="David"
+                />
+              </label>
+
+              <label for="email">
                 Email
                 <input id="email" type="email" autocomplete="email" />
               </label>
 
-              <label>
+              <label for="password">
                 Password
                 <input id="password" type="password" autocomplete="current-password" />
               </label>
 
-              <label id="confirm-password-wrap" hidden>
+              <label id="confirm-password-wrap" hidden for="confirm-password">
                 Confirm password
                 <input id="confirm-password" type="password" autocomplete="new-password" />
               </label>
@@ -146,7 +175,7 @@
             </div>
 
             <div class="stack">
-              <label>
+              <label for="new-password">
                 New password
                 <input id="new-password" type="password" autocomplete="new-password" />
               </label>
