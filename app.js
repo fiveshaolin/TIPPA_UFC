@@ -1503,7 +1503,6 @@ if (saveDisplayNameBtn) {
 }
 
 if (stickySubmitBtn) stickySubmitBtn.addEventListener("click", submitAllPicks);
-if (submitAllBtn) submitAllBtn.addEventListener("click", submitAllPicks);
 if (changePasswordBtn) changePasswordBtn.addEventListener("click", changePassword);
 
 document.addEventListener("DOMContentLoaded", () => {
