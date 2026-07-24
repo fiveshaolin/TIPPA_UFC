@@ -1161,18 +1161,6 @@ async function ensureOwnProfileExists() {
   const alreadyExists = currentProfiles.some((p) => p.id === user.id);
   if (alreadyExists) return;
 
-  const { error } = await supabaseClient
-    .from("profiles")
-    .upsert({
-      id: user.id,
-      display_name: fallbackName
-    });
-
-  if (error) {
-    console.error(error);
-    return;
-  }
-
   currentProfiles.push({
     id: user.id,
     display_name: fallbackName
@@ -1399,7 +1387,7 @@ if (signUpBtn) {
       const email = emailInput.value.trim();
       const password = passwordInput.value.trim();
 
-      const { data, error } = await supabaseClient.auth.signUp({
+      const { error } = await supabaseClient.auth.signUp({
         email,
         password,
         options: {
@@ -1413,22 +1401,6 @@ if (signUpBtn) {
         console.error(error);
         setStatus(profileStatus, `Signup error: ${error.message}`);
         return;
-      }
-
-      const user = data?.user;
-      if (user) {
-        const { error: profileError } = await supabaseClient
-          .from("profiles")
-          .upsert({
-            id: user.id,
-            display_name: displayName
-          });
-
-        if (profileError) {
-          console.error(profileError);
-          setStatus(profileStatus, `Profile setup error: ${profileError.message}`);
-          return;
-        }
       }
 
       setStatus(profileStatus, "Account created.");
@@ -1502,6 +1474,7 @@ if (saveDisplayNameBtn) {
   saveDisplayNameBtn.addEventListener("click", saveDisplayName);
 }
 
+if (submitAllBtn) submitAllBtn.addEventListener("click", submitAllPicks);
 if (stickySubmitBtn) stickySubmitBtn.addEventListener("click", submitAllPicks);
 if (changePasswordBtn) changePasswordBtn.addEventListener("click", changePassword);
 
