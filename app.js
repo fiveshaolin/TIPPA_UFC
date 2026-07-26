@@ -1195,10 +1195,11 @@ async function loadAppData(preferredView = null) {
     await ensureOwnProfileExists();
     updateAuthPanels();
 
+    // CHANGE: pick the latest event (Medic vs Rodriguez) instead of earliest
     const eventsResult = await supabaseClient
       .from("events")
       .select("*")
-      .order("event_date", { ascending: true })
+      .order("event_date", { ascending: false }) // latest event first
       .limit(1);
 
     if (eventsResult.error) {
@@ -1206,7 +1207,11 @@ async function loadAppData(preferredView = null) {
       return;
     }
 
-    currentEvent = eventsResult.data && eventsResult.data.length ? eventsResult.data[0] : null;
+    currentEvent =
+      eventsResult.data && eventsResult.data.length
+        ? eventsResult.data[0]
+        : null;
+
     if (eventBox) eventBox.textContent = formatEventName(currentEvent);
     startCountdownTimer();
 
@@ -1250,16 +1255,17 @@ async function loadAppData(preferredView = null) {
     }
 
     currentOwnPicks = picksResult.data || [];
+
+    // Rebuild drafts + save state from existing picks
     pickDrafts = {};
     saveTimers = {};
     saveStateByFight = {};
-
     currentOwnPicks.forEach((pick) => {
       pickDrafts[pick.fight_id] = {
-        picked_winner: pick.picked_winner || "",
-        method: pick.method || "",
+        picked_winner: pick.picked_winner,
+        method: pick.method,
         round_number: pick.round_number ? String(pick.round_number) : "",
-        decision_type: pick.decision_type || ""
+        decision_type: pick.decision_type
       };
       saveStateByFight[pick.fight_id] = "Saved";
     });
