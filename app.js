@@ -645,9 +645,9 @@ async function autosavePick(fightId) {
 
 async function loadSubmissionState() {
   const { count: memberCount, error: memberError } = await supabaseClient
-    .from('groupmembers')
-    .select('*', { count: 'exact', head: true })
-    .eq('groupid', currentGroup.id);
+    .from("group_members")
+    .select("*", { count: "exact", head: true })
+    .eq("group_id", currentGroup.id);
 
   if (memberError) {
     console.error(memberError);
@@ -655,10 +655,10 @@ async function loadSubmissionState() {
   }
 
   const { data: submissions, error: submissionsError } = await supabaseClient
-    .from('eventsubmissions')
-    .select('*')
-    .eq('groupid', currentGroup.id)
-    .eq('eventid', currentEvent.id);
+    .from("event_submissions")
+    .select("*")
+    .eq("group_id", currentGroup.id)
+    .eq("event_id", currentEvent.id);
 
   if (submissionsError) {
     console.error(submissionsError);
@@ -666,23 +666,10 @@ async function loadSubmissionState() {
   }
 
   const submittedCount = submissions ? submissions.length : 0;
-  const ownSubmitted = submissions.some(row => row.userid === currentSession.user.id);
+  const ownSubmitted = submissions.some((row) => row.user_id === currentSession.user.id);
 
   isSubmittedForCurrentEvent = ownSubmitted;
-  currentRevealOpen = memberCount > 0 && submittedCount === memberCount;
-
-  // New: show progress text before reveal
-  if (othersStatus) {
-    if (submittedCount === 0) {
-      othersStatus.textContent = 'No submissions yet.';
-    } else if (!currentRevealOpen) {
-      othersStatus.textContent = `${submittedCount} of ${memberCount} have submitted.`;
-    } else {
-      // Once all submitted, loadSubmittedPicks will overwrite with
-      // 'All submitted picks are now visible.'
-      othersStatus.textContent = 'Everyone has submitted.';
-    }
-  }
+  currentRevealOpen = memberCount > 0 && submittedCount >= memberCount;
 
   updateEventBadge();
   updateSubmitButtonState();
@@ -699,22 +686,23 @@ async function loadSubmittedPicks() {
   if (!othersStatus || !othersPicksBox) return;
 
   if (!currentSession || !currentGroup || !currentEvent) {
-    othersStatus.textContent = 'Hidden until everyone has submitted.';
-    othersPicksBox.innerHTML = 'Nothing to show yet.';
+    othersStatus.textContent = "Hidden until everyone has submitted.";
+    othersPicksBox.innerHTML = "Nothing to show yet.";
     return;
   }
 
   if (!currentRevealOpen) {
-    othersStatus.textContent = 'Hidden until everyone has submitted.';
-    othersPicksBox.innerHTML = 'Nothing to show yet.';
+    othersStatus.textContent = "Hidden until everyone has submitted.";
+    othersPicksBox.innerHTML = "Nothing to show yet.";
     return;
   }
 
   const { data, error } = await supabaseClient
-    .from('picks')
-    .select('*')
-    .eq('groupid', currentGroup.id)
-    .eq('eventid', currentEvent.id);
+    .from("picks")
+    .select("*")
+    .eq("group_id", currentGroup.id)
+    .eq("event_id", currentEvent.id)
+    .order("fight_id", { ascending: true });
 
   if (error) {
     console.error(error);
@@ -722,61 +710,37 @@ async function loadSubmittedPicks() {
     return;
   }
 
-  if (!data || !data.length) {
-    othersStatus.textContent = 'No picks found.';
-    othersPicksBox.innerHTML = 'Nothing to show yet.';
+  const grouped = {};
+  data.forEach((pick) => {
+    if (!grouped[pick.user_id]) grouped[pick.user_id] = [];
+    grouped[pick.user_id].push(pick);
+  });
+
+  const userIds = Object.keys(grouped);
+  if (!userIds.length) {
+    othersStatus.textContent = "No picks found.";
+    othersPicksBox.innerHTML = "Nothing to show yet.";
     return;
   }
 
-  // Group picks by fight
-  const picksByFight = {};
-  data.forEach((pick) => {
-    if (!picksByFight[pick.fightid]) {
-      picksByFight[pick.fightid] = [];
-    }
-    picksByFight[pick.fightid].push(pick);
-  });
-
-  // Sort fights: main card, by bout_order ascending (1 = main event at top)
-  const orderedFights = (currentFights || [])
-    .filter((fight) => fight.ismaincard)
-    .slice()
-    .sort((a, b) => a.boutorder - b.boutorder);
-
-  let html = '';
-
-  orderedFights.forEach((fight) => {
-    const fightPicks = picksByFight[fight.id] || [];
-    if (!fightPicks.length) return;
-
-    const fightLabel = `${fight.fightera} vs ${fight.fighterb}`;
-
-    let picksHtml = '';
-    fightPicks.forEach((pick) => {
-      const name = getDisplayName(pick.userid);
-      picksHtml += `
-        <li>
-          <strong>${escapeHtml(name)}</strong>:
-          ${escapeHtml(pick.pickedwinner)} via ${escapeHtml(describePick(pick))}
-        </li>
-      `;
+  let html = "";
+  userIds.forEach((userId) => {
+    let picksHtml = "";
+    grouped[userId].forEach((pick) => {
+      const fight = currentFights.find((f) => f.id === pick.fight_id);
+      const fightLabel = fight ? `${fight.fighter_a} vs ${fight.fighter_b}` : pick.fight_id;
+      picksHtml += `<li>${escapeHtml(fightLabel)}: <strong>${escapeHtml(pick.picked_winner)}</strong> via ${escapeHtml(describePick(pick))}</li>`;
     });
 
     html += `
       <section class="card submitted-picks-card">
-        <h3>${escapeHtml(fightLabel)}</h3>
+        <strong>${escapeHtml(getDisplayName(userId))}</strong>
         <ul>${picksHtml}</ul>
       </section>
     `;
   });
 
-  if (!html) {
-    othersStatus.textContent = 'No picks found.';
-    othersPicksBox.innerHTML = 'Nothing to show yet.';
-    return;
-  }
-
-  othersStatus.textContent = 'All submitted picks are now visible.';
+  othersStatus.textContent = "All submitted picks are now visible.";
   othersPicksBox.innerHTML = html;
 }
 
