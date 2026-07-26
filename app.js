@@ -645,9 +645,9 @@ async function autosavePick(fightId) {
 
 async function loadSubmissionState() {
   const { count: memberCount, error: memberError } = await supabaseClient
-    .from("group_members")
-    .select("*", { count: "exact", head: true })
-    .eq("group_id", currentGroup.id);
+    .from('groupmembers')
+    .select('*', { count: 'exact', head: true })
+    .eq('groupid', currentGroup.id);
 
   if (memberError) {
     console.error(memberError);
@@ -655,10 +655,10 @@ async function loadSubmissionState() {
   }
 
   const { data: submissions, error: submissionsError } = await supabaseClient
-    .from("event_submissions")
-    .select("*")
-    .eq("group_id", currentGroup.id)
-    .eq("event_id", currentEvent.id);
+    .from('eventsubmissions')
+    .select('*')
+    .eq('groupid', currentGroup.id)
+    .eq('eventid', currentEvent.id);
 
   if (submissionsError) {
     console.error(submissionsError);
@@ -666,10 +666,23 @@ async function loadSubmissionState() {
   }
 
   const submittedCount = submissions ? submissions.length : 0;
-  const ownSubmitted = submissions.some((row) => row.user_id === currentSession.user.id);
+  const ownSubmitted = submissions.some(row => row.userid === currentSession.user.id);
 
   isSubmittedForCurrentEvent = ownSubmitted;
-  currentRevealOpen = memberCount > 0 && submittedCount >= memberCount;
+  currentRevealOpen = memberCount > 0 && submittedCount === memberCount;
+
+  // New: show progress text before reveal
+  if (othersStatus) {
+    if (submittedCount === 0) {
+      othersStatus.textContent = 'No submissions yet.';
+    } else if (!currentRevealOpen) {
+      othersStatus.textContent = `${submittedCount} of ${memberCount} have submitted.`;
+    } else {
+      // Once all submitted, loadSubmittedPicks will overwrite with
+      // 'All submitted picks are now visible.'
+      othersStatus.textContent = 'Everyone has submitted.';
+    }
+  }
 
   updateEventBadge();
   updateSubmitButtonState();
