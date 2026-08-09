@@ -57,6 +57,7 @@ const eventBox = document.getElementById("event-box");
 const countdownBox = document.getElementById("countdown-box");
 const eventBadge = document.getElementById("event-badge");
 const fightsBox = document.getElementById("fights-box");
+const fightsCard = document.getElementById("fights-card");
 
 const othersStatus = document.getElementById("others-status");
 const othersPicksBox = document.getElementById("others-picks-box");
@@ -387,7 +388,9 @@ function updateSubmitButtonState() {
 
 function updateStickyBar() {
   if (!stickyBar) return;
-  stickyBar.hidden = currentView !== "event" || !currentSession || !currentEvent;
+  const revealActive = !!currentRevealOpen;
+  stickyBar.hidden = currentView !== "event" || !currentSession || !currentEvent || revealActive;
+  if (fightsCard) fightsCard.hidden = revealActive;
   updateSubmitButtonState();
 }
 
@@ -672,7 +675,7 @@ async function loadSubmissionState() {
   currentRevealOpen = memberCount > 0 && submittedCount >= memberCount;
 
   updateEventBadge();
-  updateSubmitButtonState();
+  updateStickyBar();
 }
 
 function describePick(pick) {
@@ -710,35 +713,49 @@ async function loadSubmittedPicks() {
     return;
   }
 
-  const grouped = {};
-  data.forEach((pick) => {
-    if (!grouped[pick.user_id]) grouped[pick.user_id] = [];
-    grouped[pick.user_id].push(pick);
-  });
-
-  const userIds = Object.keys(grouped);
-  if (!userIds.length) {
+  if (!data || !data.length) {
     othersStatus.textContent = "No picks found.";
     othersPicksBox.innerHTML = "Nothing to show yet.";
     return;
   }
 
+  const groupedByFight = {};
+  data.forEach((pick) => {
+    if (!groupedByFight[pick.fight_id]) groupedByFight[pick.fight_id] = [];
+    groupedByFight[pick.fight_id].push(pick);
+  });
+
+  const orderedFights = currentFights
+    .slice()
+    .sort((a, b) => toNumber(a.bout_order) - toNumber(b.bout_order));
+
   let html = "";
-  userIds.forEach((userId) => {
+  orderedFights.forEach((fight) => {
+    const picksForFight = groupedByFight[fight.id];
+    if (!picksForFight || !picksForFight.length) return;
+
+    const sortedPicks = picksForFight.slice().sort((a, b) =>
+      getDisplayName(a.user_id).localeCompare(getDisplayName(b.user_id))
+    );
+
     let picksHtml = "";
-    grouped[userId].forEach((pick) => {
-      const fight = currentFights.find((f) => f.id === pick.fight_id);
-      const fightLabel = fight ? `${fight.fighter_a} vs ${fight.fighter_b}` : pick.fight_id;
-      picksHtml += `<li>${escapeHtml(fightLabel)}: <strong>${escapeHtml(pick.picked_winner)}</strong> via ${escapeHtml(describePick(pick))}</li>`;
+    sortedPicks.forEach((pick) => {
+      picksHtml += `<li><strong>${escapeHtml(getDisplayName(pick.user_id))}</strong>: ${escapeHtml(pick.picked_winner)} via ${escapeHtml(describePick(pick))}</li>`;
     });
 
     html += `
       <section class="card submitted-picks-card">
-        <strong>${escapeHtml(getDisplayName(userId))}</strong>
+        <strong>Fight ${escapeHtml(fight.bout_order)}: ${escapeHtml(fight.fighter_a)} vs ${escapeHtml(fight.fighter_b)}</strong>
         <ul>${picksHtml}</ul>
       </section>
     `;
   });
+
+  if (!html) {
+    othersStatus.textContent = "No picks found.";
+    othersPicksBox.innerHTML = "Nothing to show yet.";
+    return;
+  }
 
   othersStatus.textContent = "All submitted picks are now visible.";
   othersPicksBox.innerHTML = html;
