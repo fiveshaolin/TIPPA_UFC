@@ -672,8 +672,10 @@ async function loadSubmissionState() {
   const ownSubmitted = submissions.some((row) => row.user_id === currentSession.user.id);
 
   isSubmittedForCurrentEvent = ownSubmitted;
-  currentRevealOpen = memberCount > 0 && submittedCount >= memberCount;
-
+  currentRevealOpen =
+  memberCount > 0 &&
+  (submittedCount >= memberCount || hasLockTimePassed());
+  
   updateEventBadge();
   updateStickyBar();
 }
